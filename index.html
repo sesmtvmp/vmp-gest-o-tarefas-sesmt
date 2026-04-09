@@ -358,6 +358,14 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
           <div class="ss"><div class="ss-ttl">📧 E-mail do administrador</div>
             <div class="fg"><label class="flbl">E-mail para receber alertas de tarefas</label><input class="finput" id="c-email"></div>
           </div>
+          <div class="ss"><div class="ss-ttl">⚙️ EmailJS — Envio de notificações por e-mail</div>
+            <div class="info-box" style="margin-bottom:10px;font-size:11px">Para enviar e-mails reais, crie uma conta gratuita em <strong>emailjs.com</strong>, configure um serviço e um template com as variáveis <code>to_email</code>, <code>subject</code> e <code>message</code>, e preencha abaixo.</div>
+            <div class="fgrid">
+              <div class="fg"><label class="flbl">Service ID</label><input class="finput" id="c-ejs-svc" placeholder="service_xxxxxxx"></div>
+              <div class="fg"><label class="flbl">Template ID</label><input class="finput" id="c-ejs-tpl" placeholder="template_xxxxxxx"></div>
+            </div>
+            <div class="fg"><label class="flbl">Public Key (User ID)</label><input class="finput" id="c-ejs-key" placeholder="xxxxxxxxxxxxxxxxxxxx"></div>
+          </div>
           <div class="ss"><div class="ss-ttl">🏗️ Unidades</div>
             <div id="ul" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
             <div style="display:flex;gap:8px"><input class="finput" id="nu-in" placeholder="Nova unidade..." style="flex:1"><button class="btn btn-p" onclick="addUnit()">Adicionar</button></div>
@@ -545,6 +553,8 @@ function startPolling(){
         applyData(data, false);
         setLastSync(data.updatedAt);
       }
+      // Verifica alertas de prazo a cada ciclo de polling
+      checkDeadlineAlerts();
     }catch(e){ /* silent — no toast on background poll */ }
   }, 10000);
 }
@@ -635,6 +645,7 @@ function doLogin(){
   document.getElementById('ha').style.background=abg(i);
   document.getElementById('ha').style.color=atc(i);
   applySettings();populateFilters();updateCounts();renderKanban();updateMsgBadge();
+  checkDeadlineAlerts();
   startPolling(); // begin real-time sync for all users
 }
 
@@ -707,6 +718,7 @@ function setView(v){
 function canSeeTask(t,cu){
   if(!cu)return false;
   if(isRoot(cu))return true;
+  // Tarefas atribuídas ao @admin são visíveis APENAS para o próprio @admin
   const adminUser=S.users.find(x=>x.un===ROOT_UN);
   if(adminUser&&t.uid===adminUser.id)return false;
   if(cu.p.isAdmin||cu.p.changeAll)return true;
@@ -861,20 +873,36 @@ function renderList(){
 }
 
 // ============ TASK MODAL (ADMIN ONLY - MOD 02) ============
+function tmAutoUnit(){
+  // Auto-preenche unidade se usuário tiver só 1 unidade
+  const uid=document.getElementById('tm-u')?.value;
+  if(!uid)return;
+  const u=S.users.find(x=>x.id===uid);
+  if(!u)return;
+  const unSel=document.getElementById('tm-un');
+  if(u.units&&u.units.length===1){
+    // Seleciona a única unidade do usuário
+    for(let i=0;i<unSel.options.length;i++){
+      if(unSel.options[i].value===u.units[0]){unSel.selectedIndex=i;break;}
+    }
+  }
+  // Se tiver mais de 1 unidade, não faz nada (admin define)
+}
+
 function openTaskModal(defCol,eid){
   const cu=S_cu;
-  // [MOD 02] Somente admin abre este modal de edição completa
   if(!isRoot(cu)&&!cu.p.isAdmin){toast('Apenas administradores podem criar/editar tarefas.','e');return;}
   const t=eid?S.tasks.find(x=>x.id===eid):null;
-  const uopts=S.users.filter(u=>u.active&&!isRoot({un:u.un})).map(u=>`<option value="${u.id}" ${t?.uid===u.id?'selected':''}>${u.name} (${u.turno})</option>`).join('');
-  const unopts=S.cfg.units.map(u=>`<option ${t?.unit===u?'selected':''}>${u}</option>`).join('');
+  const uopts=S.users.filter(u=>u.active&&(!isRoot({un:u.un})||isRoot(cu))).map(u=>`<option value="${u.id}" ${t?.uid===u.id?'selected':''}>${u.name} (${u.turno})</option>`).join('');
+  const unopts=S.cfg.units.map(u=>`<option value="${u}" ${t?.unit===u?'selected':''}>${u}</option>`).join('');
   const copts=COLS.map(c=>`<option value="${c.k}" ${(t?.status||defCol||'pendente')===c.k?'selected':''}>${c.l}</option>`).join('');
+  const isNew=!eid;
   showModal(`<div class="modal-hdr"><div class="modal-ttl">${t?'Editar Tarefa':'Nova Tarefa'}</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
     <div class="fg"><label class="flbl">Título *</label><input class="finput" id="tm-t" value="${t?.title||''}" placeholder="Descrição da tarefa"></div>
     <div class="fg"><label class="flbl">Descrição</label><textarea class="fta" id="tm-d">${t?.desc||''}</textarea></div>
     <div class="fgrid">
-      <div class="fg"><label class="flbl">Responsável principal</label><select class="fsel" id="tm-u">${uopts}</select></div>
+      <div class="fg"><label class="flbl">Responsável principal</label><select class="fsel" id="tm-u" onchange="tmAutoUnit()">${uopts}</select></div>
       <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="tm-un">${unopts}</select></div>
       <div class="fg"><label class="flbl">Turno / Responsabilidade</label>
         <select class="fsel" id="tm-tr">
@@ -903,8 +931,28 @@ function openTaskModal(defCol,eid){
       <div class="fg"><label class="flbl">Prazo</label><input class="finput" type="date" id="tm-du" value="${t?.due||''}"></div>
     </div>
     <div class="fg"><label class="flbl">Observação inicial</label><textarea class="fta" id="tm-ob" placeholder="Opcional..." style="min-height:56px"></textarea></div>
+    ${isNew?`<div class="sep"></div>
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">📋 Replicar para outros usuários <span style="color:var(--text3);font-weight:400">(opcional)</span></div>
+    <div class="info-box" style="margin-bottom:10px;font-size:11px">Além do responsável principal acima, selecione outros usuários que receberão uma cópia desta tarefa, cada um com seu próprio prazo.</div>
+    <div id="rep-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+    <button class="btn btn-sm" onclick="tmAddRep()" style="width:100%">+ Adicionar usuário para replicar</button>`:''}
   </div>
-  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTask('${eid||''}')">💾 Salvar</button></div>`,true);
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTask('${eid||''}')">💾 Salvar${isNew?' e replicar':''}</button></div>`,true);
+  // Auto-fill unidade ao abrir se já tem usuário selecionado
+  if(!t) tmAutoUnit();
+}
+
+function tmAddRep(){
+  const list=document.getElementById('rep-list');
+  if(!list)return;
+  const idx=list.children.length;
+  const uopts=S.users.filter(u=>u.active&&!isRoot({un:u.un})).map(u=>`<option value="${u.id}">${u.name} — ${u.units.join(', ')}</option>`).join('');
+  const row=document.createElement('div');
+  row.style.cssText='display:grid;grid-template-columns:1fr 1fr auto;gap:7px;align-items:center;background:var(--bg3);border-radius:var(--r);padding:8px';
+  row.innerHTML=`<select class="fsel" id="rep-u-${idx}" style="font-size:12px">${uopts}</select>
+    <input class="finput" type="date" id="rep-d-${idx}" style="font-size:12px" placeholder="Prazo">
+    <button class="ib del" onclick="this.closest('div').remove()" title="Remover">✕</button>`;
+  list.appendChild(row);
 }
 
 function saveTask(eid){
@@ -920,14 +968,50 @@ function saveTask(eid){
     t.turno=document.getElementById('tm-tr').value;t.status=document.getElementById('tm-s').value;
     t.prio=document.getElementById('tm-p').value;t.start=document.getElementById('tm-st').value;
     t.due=document.getElementById('tm-du').value;t.period=document.getElementById('tm-per').value;
-    if(os!==t.status){t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:`Status: "${slbl(os)}" → "${slbl(t.status)}".`,t:'s'});simEmail(t,cu,`Status: "${slbl(os)}" → "${slbl(t.status)}"`);}
+    if(os!==t.status){t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:`Status: "${slbl(os)}" → "${slbl(t.status)}".`,t:'s'});notifyAdmins(t,cu,`Status alterado: "${slbl(os)}" → "${slbl(t.status)}"`);}
     if(obs)t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:obs,t:'u'});
     toast('Tarefa atualizada!','s');
   }else{
-    const nt={id:'t'+Date.now(),title:ttl,desc:document.getElementById('tm-d').value,uid:document.getElementById('tm-u').value,unit:document.getElementById('tm-un').value,turno:document.getElementById('tm-tr').value,status:document.getElementById('tm-s').value,prio:document.getElementById('tm-p').value,start:document.getElementById('tm-st').value,due:document.getElementById('tm-du').value,period:document.getElementById('tm-per').value,by:cu.id,obs:[{by:cu.id,name:cu.name,dt:nowDt(),txt:'Tarefa criada.',t:'s'}]};
-    if(obs)nt.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:obs,t:'u'});
-    S.tasks.push(nt);
-    toast('Tarefa criada!','s');
+    const base={id:'t'+Date.now(),title:ttl,desc:document.getElementById('tm-d').value,
+      uid:document.getElementById('tm-u').value,unit:document.getElementById('tm-un').value,
+      turno:document.getElementById('tm-tr').value,status:document.getElementById('tm-s').value,
+      prio:document.getElementById('tm-p').value,start:document.getElementById('tm-st').value,
+      due:document.getElementById('tm-du').value,period:document.getElementById('tm-per').value,
+      by:cu.id,obs:[{by:cu.id,name:cu.name,dt:nowDt(),txt:'Tarefa criada.',t:'s'}]};
+    if(obs)base.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:obs,t:'u'});
+    S.tasks.push(base);
+    notifyTaskCreated(base);
+
+    // Replicar para usuários adicionais
+    const repList=document.getElementById('rep-list');
+    if(repList){
+      const rows=repList.querySelectorAll('div');
+      let repCount=0;
+      rows.forEach((row,i)=>{
+        const uSel=row.querySelector('select');
+        const dInp=row.querySelector('input[type="date"]');
+        if(!uSel||!uSel.value)return;
+        const repUser=S.users.find(x=>x.id===uSel.value);
+        if(!repUser)return;
+        // Auto-unidade se só tiver 1
+        const repUnit=repUser.units&&repUser.units.length===1?repUser.units[0]:base.unit;
+        const repTask={...base,
+          id:'t'+(Date.now()+i+1),
+          uid:uSel.value,
+          unit:repUnit,
+          due:dInp?.value||base.due,
+          status:'pendente',
+          obs:[{by:cu.id,name:cu.name,dt:nowDt(),txt:`Replicada de tarefa criada para ${S.users.find(x=>x.id===base.uid)?.name||'principal'}.`,t:'s'}]
+        };
+        S.tasks.push(repTask);
+        notifyTaskCreated(repTask);
+        repCount++;
+      });
+      if(repCount>0)toast(`Tarefa criada e replicada para ${repCount} usuário(s)!`,'s');
+      else toast('Tarefa criada!','s');
+    }else{
+      toast('Tarefa criada!','s');
+    }
   }
   closeModal();renderKanban();updateCounts();scheduleAutoSave();
 }
@@ -1028,7 +1112,8 @@ function chgSt(id){
   if(t.status===ns)return;
   const ol=slbl(t.status),nl=slbl(ns);const cu=S_cu;
   t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:`Status: "${ol}" → "${nl}".`,t:'s'});
-  t.status=ns;simEmail(t,cu,`Status: "${ol}" → "${nl}"`);
+  t.status=ns;
+  notifyAdmins(t,cu,`Status alterado: "${ol}" → "${nl}"`);
   closeModal();renderKanban();updateCounts();toast(`Status → "${nl}"`, 's');scheduleAutoSave();
 }
 
@@ -1038,7 +1123,7 @@ function addObs(id){
   if(!txt){toast('Escreva uma observação','e');return;}
   const cu=S_cu;
   t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt,t:'u'});
-  simEmail(t,cu,`Nova observação: "${txt.slice(0,60)}${txt.length>60?'...':''}"`);
+  notifyAdmins(t,cu,`Nova observação: "${txt.slice(0,80)}${txt.length>80?'...':''}"`);
   closeModal();openDetail(id);toast('Observação adicionada!','s');scheduleAutoSave();
 }
 
@@ -1153,20 +1238,127 @@ function deleteMsg(mid){
   renderMsgs();toast('Mensagem excluída.','i');scheduleAutoSave();
 }
 
-function simEmailMsg(m){
-  console.log(`📧 [EMAIL SIMULADO]\nPara: ${S.cfg.email}\nAssunto: [SST] Nova mensagem de ${m.fromName} — ${m.subject}\nTipo: ${m.type}\n\n${m.body}`);
+// ============ EMAIL / NOTIFICAÇÕES ============
+// Envia e-mail via EmailJS (configurado em S.cfg.emailjsService/Template/Key)
+// Fallback: simula no console se não configurado
+async function sendEmail(to, subject, body){
+  if(!to){console.warn('[EMAIL] Sem destinatário para:',subject);return;}
+  // Tenta EmailJS se configurado
+  const svc=S.cfg.emailjsService;
+  const tpl=S.cfg.emailjsTemplate;
+  const key=S.cfg.emailjsKey;
+  if(svc&&tpl&&key){
+    try{
+      await fetch('https://api.emailjs.com/api/v1.0/email/send',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({service_id:svc,template_id:tpl,user_id:key,
+          template_params:{to_email:to,subject,message:body}})
+      });
+      console.log(`✅ [EMAIL] Enviado para ${to}: ${subject}`);
+    }catch(e){
+      console.warn(`⚠️ [EMAIL] Falha ao enviar para ${to}:`,e.message);
+    }
+  }else{
+    // Simula no console quando EmailJS não está configurado
+    console.log(`📧 [EMAIL SIMULADO]\nPara: ${to}\nAssunto: ${subject}\n\n${body}\n${'─'.repeat(40)}`);
+  }
 }
 
-// ============ EMAIL SIM ============
+function getAdminEmails(){
+  // Retorna e-mails do admin geral + todos com isAdmin=true
+  const emails=[];
+  S.users.forEach(u=>{
+    if((isRoot(u)||u.p?.isAdmin)&&u.email)emails.push(u.email);
+  });
+  // Fallback para email geral das configurações
+  if(!emails.length&&S.cfg.email)emails.push(S.cfg.email);
+  return [...new Set(emails)];
+}
+
+function getUserEmail(uid){
+  const u=S.users.find(x=>x.id===uid);
+  return u?.email||null;
+}
+
+function notifyTaskCreated(task){
+  const u=S.users.find(x=>x.id===task.uid);
+  if(!u||!u.email)return;
+  sendEmail(u.email,
+    `[SST] Nova tarefa: "${task.title}"`,
+    `Olá ${u.name},\n\nUma nova tarefa foi atribuída a você:\n\n📋 ${task.title}\n📍 Unidade: ${task.unit}\n📅 Prazo: ${fmtD(task.due)}\n⚠️ Prioridade: ${task.prio}\n\nAcesse o sistema para mais detalhes.`
+  );
+}
+
+function notifyAdmins(task,byU,action){
+  const emails=getAdminEmails();
+  const u=S.users.find(x=>x.id===task.uid);
+  emails.forEach(email=>{
+    sendEmail(email,
+      `[SST] Tarefa atualizada: "${task.title}"`,
+      `Olá,\n\n${byU.name} realizou uma ação na tarefa:\n\n📋 ${task.title}\n👤 Responsável: ${u?.name||'—'}\n📍 Unidade: ${task.unit}\n🔄 Ação: ${action}\n\nAcesse o sistema para mais detalhes.`
+    );
+  });
+}
+
+function notifyMsgSent(msg){
+  const emails=getAdminEmails();
+  emails.forEach(email=>{
+    sendEmail(email,
+      `[SST] Nova mensagem de ${msg.fromName}`,
+      `Olá,\n\n${msg.fromName} enviou uma mensagem:\n\n📌 Assunto: ${msg.subject}\n🏷️ Tipo: ${msg.type}\n\n${msg.body}\n\nAcesse o sistema para responder.`
+    );
+  });
+}
+
+// Alertas de prazo — chamado a cada login e a cada 10s no polling
+function checkDeadlineAlerts(){
+  if(!S_cu||!isRoot(S_cu)&&!S_cu.p?.isAdmin)return;
+  const now=new Date();now.setHours(0,0,0,0);
+  S.tasks.forEach(t=>{
+    if(t.status==='concluido'||!t.due)return;
+    const u=S.users.find(x=>x.id===t.uid);
+    if(!u||!u.email)return;
+    const due=new Date(t.due);due.setHours(0,0,0,0);
+    const diff=Math.round((due-now)/(1000*60*60*24)); // dias
+    const lastAlert=t._lastAlert||'';
+    const todayStr=nowDt();
+    if(diff===30&&lastAlert!==`30-${todayStr}`){
+      t._lastAlert=`30-${todayStr}`;
+      sendEmail(u.email,`[SST] ⚠️ Tarefa vence em 1 mês: "${t.title}"`,
+        `Olá ${u.name},\n\nLembrete: sua tarefa "${t.title}" (${t.unit}) vence em 1 mês, em ${fmtD(t.due)}.\n\nAcesse o sistema e verifique.`);
+    }else if(diff===7&&lastAlert!==`7-${todayStr}`){
+      t._lastAlert=`7-${todayStr}`;
+      sendEmail(u.email,`[SST] ⚠️ Tarefa vence em 1 semana: "${t.title}"`,
+        `Olá ${u.name},\n\nAtenção: sua tarefa "${t.title}" (${t.unit}) vence em 1 semana, em ${fmtD(t.due)}.\n\nAcesse o sistema urgente.`);
+    }else if(diff===1&&lastAlert!==`1-${todayStr}`){
+      t._lastAlert=`1-${todayStr}`;
+      sendEmail(u.email,`[SST] 🚨 Tarefa vence AMANHÃ: "${t.title}"`,
+        `Olá ${u.name},\n\nURGENTE: sua tarefa "${t.title}" (${t.unit}) vence AMANHÃ, em ${fmtD(t.due)}.\n\nAcesse o sistema imediatamente.`);
+    }else if(diff<0&&lastAlert!==`late-${todayStr}`){
+      t._lastAlert=`late-${todayStr}`;
+      sendEmail(u.email,`[SST] 🔴 Tarefa VENCIDA: "${t.title}"`,
+        `Olá ${u.name},\n\nSua tarefa "${t.title}" (${t.unit}) está VENCIDA desde ${fmtD(t.due)} (${Math.abs(diff)} dia(s) de atraso).\n\nAcesse o sistema e regularize.`);
+    }
+  });
+}
+
+function simEmailMsg(m){
+  notifyMsgSent(m);
+}
+
+// ============ EMAIL SIM (mantido por compatibilidade) ============
 function simEmail(task,byU,action){
-  console.log(`📧 [EMAIL]\nPara: ${S.cfg.email}\nAssunto: [SST] "${task.title}"\nAção: ${action}\nPor: ${byU.name}\n`);
+  notifyAdmins(task,byU,action);
 }
 
 // ============ USERS ============
 function renderUsers(){
   const g=document.getElementById('ugrid');g.innerHTML='';
   const cu=S_cu;
-  S.users.forEach(u=>{
+  // Ordenar por nome alfabeticamente
+  const sorted=[...S.users].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  sorted.forEach(u=>{
     const i=S.users.indexOf(u);
     const pks=Object.entries(u.p).filter(([k,v])=>v).map(([k])=>k);
     const isRootU=isRoot(u);
@@ -1205,6 +1397,7 @@ function openUserModal(eid){
       <div class="fg"><label class="flbl">Senha${u?' (em branco = manter)':' *'}</label><input class="finput" type="password" id="un-pw" placeholder="••••••••"></div>
       <div class="fg"><label class="flbl">Turno</label><select class="fsel" id="un-tr"><option value="diurno" ${u?.turno!=='noturno'?'selected':''}>🌞 Diurno</option><option value="noturno" ${u?.turno==='noturno'?'selected':''}>🌙 Noturno</option></select></div>
     </div>
+    <div class="fg"><label class="flbl">📧 E-mail para notificações</label><input class="finput" type="email" id="un-email" value="${u?.email||''}" placeholder="usuario@empresa.com"></div>
     <div class="fg"><label class="flbl">Unidades</label><div class="cb-g" style="flex-direction:row;flex-wrap:wrap;gap:8px" id="un-units">${uc}</div></div>
     <div class="fg" style="margin-top:8px">
       <label class="flbl">Permissões ${!canEditPerms?'<span style="color:var(--amber)">(somente admin geral pode alterar)</span>':''}</label>
@@ -1219,6 +1412,7 @@ function saveUser(eid){
   const name=document.getElementById('un-nm').value.trim();
   const un=document.getElementById('un-us').value.trim();
   const pw=document.getElementById('un-pw').value;
+  const email=document.getElementById('un-email').value.trim();
   if(!name||!un){toast('Nome e usuário obrigatórios','e');return;}
   if(!eid&&!pw){toast('Defina uma senha','e');return;}
   const units=[...document.querySelectorAll('#un-units input:checked')].map(c=>c.value);
@@ -1226,7 +1420,7 @@ function saveUser(eid){
   if(eid){
     const u=S.users.find(x=>x.id===eid);
     if(isRoot(u)&&!isRoot(cu)){toast('Não é possível editar o admin geral.','e');return;}
-    u.name=name;u.turno=document.getElementById('un-tr').value;u.units=units;
+    u.name=name;u.turno=document.getElementById('un-tr').value;u.units=units;u.email=email;
     if(!isRoot(u))u.un=un;
     if(canEditPerms){const p={};Object.keys(PL).forEach(k=>{p[k]=document.getElementById('p-'+k)?.checked||false;});u.p=p;}
     if(pw)u.pw=pw;
@@ -1236,7 +1430,7 @@ function saveUser(eid){
     const p={};
     if(canEditPerms)Object.keys(PL).forEach(k=>{p[k]=document.getElementById('p-'+k)?.checked||false;});
     else Object.keys(PL).forEach(k=>{p[k]=false;});
-    S.users.push({id:'u'+Date.now(),un,pw,name,turno:document.getElementById('un-tr').value,units,p,active:true});
+    S.users.push({id:'u'+Date.now(),un,pw,name,email,turno:document.getElementById('un-tr').value,units,p,active:true});
     toast('Usuário criado!','s');
   }
   closeModal();renderUsers();populateFilters();scheduleAutoSave();
@@ -1260,6 +1454,9 @@ function renderCfg(){
   document.getElementById('c-ftr').value=c.ftr||'';
   document.getElementById('c-ver').value=c.ver||'';
   document.getElementById('c-email').value=c.email||'';
+  document.getElementById('c-ejs-svc').value=c.emailjsService||'';
+  document.getElementById('c-ejs-tpl').value=c.emailjsTemplate||'';
+  document.getElementById('c-ejs-key').value=c.emailjsKey||'';
   renderUL();
   document.querySelectorAll('.accent-o').forEach(el=>{el.style.outline=el.dataset.c===c.accent?'3px solid #fff':'none';el.style.outlineOffset='2px';});
 }
@@ -1311,6 +1508,9 @@ function saveSettings(){
   S.cfg.ftr=document.getElementById('c-ftr').value;
   S.cfg.ver=document.getElementById('c-ver').value;
   S.cfg.email=document.getElementById('c-email').value;
+  S.cfg.emailjsService=document.getElementById('c-ejs-svc').value.trim();
+  S.cfg.emailjsTemplate=document.getElementById('c-ejs-tpl').value.trim();
+  S.cfg.emailjsKey=document.getElementById('c-ejs-key').value.trim();
   applySettings();
   saveToKV();
   toast('Configurações salvas!','s');
