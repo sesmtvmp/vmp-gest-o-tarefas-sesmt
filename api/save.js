@@ -1,10 +1,5 @@
-// POST /api/save
-// Writes sst:data to Upstash Redis via HTTP REST API.
-// Env vars set automatically when you connect Upstash on Vercel Marketplace:
-//   UPSTASH_REDIS_REST_URL
-//   UPSTASH_REDIS_REST_TOKEN
-
-export default async function handler(req, res) {
+// POST /api/save — grava sst:data no Upstash Redis
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -17,8 +12,7 @@ export default async function handler(req, res) {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!url || !token) {
-    // Upstash not connected — acknowledge but don't crash
-    return res.status(200).json({ ok: true, warn: 'Upstash not configured, data not persisted' });
+    return res.status(200).json({ ok: true, warn: 'Upstash not configured' });
   }
 
   try {
@@ -28,28 +22,25 @@ export default async function handler(req, res) {
     }
 
     const payload = {
-      cfg:      body.cfg      || {},
-      users:    body.users    || [],
-      tasks:    body.tasks    || [],
-      messages: body.messages || [],
+      cfg:       body.cfg      || {},
+      users:     body.users    || [],
+      tasks:     body.tasks    || [],
+      messages:  body.messages || [],
       updatedAt: new Date().toISOString()
     };
 
-    const valueStr = JSON.stringify(payload);
-
-    // Upstash REST: POST https://<url>/set/<key>  with body = the value
-    const r = await fetch(`${url}/set/sst:data`, {
+    const r = await fetch(url + '/set/sst:data', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: 'Bearer ' + token,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(valueStr)   // Upstash expects the value as a JSON-encoded string
+      body: JSON.stringify(JSON.stringify(payload))
     });
 
     if (!r.ok) {
-      const errText = await r.text();
-      throw new Error(`Upstash HTTP ${r.status}: ${errText}`);
+      const txt = await r.text();
+      throw new Error('Upstash HTTP ' + r.status + ': ' + txt);
     }
 
     return res.status(200).json({ ok: true, updatedAt: payload.updatedAt });
@@ -58,4 +49,4 @@ export default async function handler(req, res) {
     console.error('[POST /api/save]', err.message);
     return res.status(500).json({ error: 'Failed to save', detail: err.message });
   }
-}
+};
