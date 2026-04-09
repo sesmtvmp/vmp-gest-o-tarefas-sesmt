@@ -449,6 +449,10 @@ const nowDt=()=>new Date().toISOString().slice(0,10);
 // All writes → POST /api/save
 // Real-time: polling every 10s, merges remote changes without disrupting active UI
 
+// ============ STATE ============
+let S = { cfg:{}, users:[], tasks:[], messages:[] };
+let S_cu = null, S_qf = null;
+
 let _lastUpdatedAt = null;   // tracks last known server timestamp
 let _pollTimer = null;
 let _saveTimer = null;
