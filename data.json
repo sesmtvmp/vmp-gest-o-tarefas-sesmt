@@ -1,14 +1,18 @@
 {
   "cfg": {
     "siteTitle": "SST Manager",
-    "sub": "Gestão de Segurança do Trabalho",
+    "sub": "GestÃ£o de SeguranÃ§a do Trabalho",
     "hdr": "SST Manager",
     "company": "Empresa SST",
-    "ftr": "© 2024 Empresa SST — Sistema de Gestão de SST",
+    "ftr": "Â© 2024 Empresa SST â Sistema de GestÃ£o de SST",
     "ver": "v1.0.0",
     "email": "admin@empresa.com",
     "accent": "#3b82f6",
-    "units": ["Unidade A", "Unidade B", "Unidade C"]
+    "units": [
+      "Unidade A",
+      "Unidade B",
+      "Unidade C"
+    ]
   },
   "users": [
     {
@@ -17,18 +21,40 @@
       "pw": "sesmtvmp",
       "name": "Administrador",
       "turno": "diurno",
-      "units": ["Unidade A", "Unidade B", "Unidade C"],
-      "p": { "changeSelf": true, "changeAll": true, "addObs": true, "editTask": true, "manageTask": true, "deleteTask": true, "isAdmin": true },
+      "units": [
+        "Unidade A",
+        "Unidade B",
+        "Unidade C"
+      ],
+      "p": {
+        "changeSelf": true,
+        "changeAll": true,
+        "addObs": true,
+        "editTask": true,
+        "manageTask": true,
+        "deleteTask": true,
+        "isAdmin": true
+      },
       "active": true
     },
     {
       "id": "u2",
       "un": "carlos.m",
       "pw": "senha123",
-      "name": "Carlos Mendonça",
+      "name": "Carlos MendonÃ§a",
       "turno": "diurno",
-      "units": ["Unidade A"],
-      "p": { "changeSelf": true, "changeAll": false, "addObs": true, "editTask": false, "manageTask": false, "deleteTask": false, "isAdmin": false },
+      "units": [
+        "Unidade A"
+      ],
+      "p": {
+        "changeSelf": true,
+        "changeAll": false,
+        "addObs": true,
+        "editTask": false,
+        "manageTask": false,
+        "deleteTask": false,
+        "isAdmin": false
+      },
       "active": true
     },
     {
@@ -37,8 +63,19 @@
       "pw": "senha123",
       "name": "Ana Paula Ferreira",
       "turno": "diurno",
-      "units": ["Unidade A", "Unidade B"],
-      "p": { "changeSelf": true, "changeAll": false, "addObs": true, "editTask": false, "manageTask": false, "deleteTask": false, "isAdmin": false },
+      "units": [
+        "Unidade A",
+        "Unidade B"
+      ],
+      "p": {
+        "changeSelf": true,
+        "changeAll": false,
+        "addObs": true,
+        "editTask": false,
+        "manageTask": false,
+        "deleteTask": false,
+        "isAdmin": false
+      },
       "active": true
     },
     {
@@ -47,8 +84,18 @@
       "pw": "senha123",
       "name": "Rafael Souza",
       "turno": "noturno",
-      "units": ["Unidade B"],
-      "p": { "changeSelf": true, "changeAll": false, "addObs": true, "editTask": false, "manageTask": false, "deleteTask": false, "isAdmin": false },
+      "units": [
+        "Unidade B"
+      ],
+      "p": {
+        "changeSelf": true,
+        "changeAll": false,
+        "addObs": true,
+        "editTask": false,
+        "manageTask": false,
+        "deleteTask": false,
+        "isAdmin": false
+      },
       "active": true
     },
     {
@@ -57,16 +104,27 @@
       "pw": "senha123",
       "name": "Mariana Lima",
       "turno": "noturno",
-      "units": ["Unidade B", "Unidade C"],
-      "p": { "changeSelf": false, "changeAll": false, "addObs": true, "editTask": false, "manageTask": false, "deleteTask": false, "isAdmin": false },
+      "units": [
+        "Unidade B",
+        "Unidade C"
+      ],
+      "p": {
+        "changeSelf": false,
+        "changeAll": false,
+        "addObs": true,
+        "editTask": false,
+        "manageTask": false,
+        "deleteTask": false,
+        "isAdmin": false
+      },
       "active": true
     }
   ],
   "tasks": [
     {
       "id": "t1",
-      "title": "Inspeção NR-10 — Painel Elétrico",
-      "desc": "Realizar inspeção completa do painel elétrico do setor de produção.",
+      "title": "InspeÃ§Ã£o NR-10 â Painel ElÃ©trico",
+      "desc": "Realizar inspeÃ§Ã£o completa do painel elÃ©trico do setor de produÃ§Ã£o.",
       "status": "andamento",
       "prio": "alta",
       "unit": "Unidade A",
@@ -77,14 +135,26 @@
       "by": "u1",
       "period": "unico",
       "obs": [
-        { "by": "u1", "name": "Administrador", "dt": "2024-06-10", "txt": "Tarefa criada.", "t": "s" },
-        { "by": "u2", "name": "Carlos Mendonça", "dt": "2024-06-11", "txt": "Iniciado levantamento de riscos no painel 3.", "t": "u" }
+        {
+          "by": "u1",
+          "name": "Administrador",
+          "dt": "2024-06-10",
+          "txt": "Tarefa criada.",
+          "t": "s"
+        },
+        {
+          "by": "u2",
+          "name": "Carlos MendonÃ§a",
+          "dt": "2024-06-11",
+          "txt": "Iniciado levantamento de riscos no painel 3.",
+          "t": "u"
+        }
       ]
     },
     {
       "id": "t2",
-      "title": "Levantamento de riscos — Linha 3",
-      "desc": "Mapear todos os riscos da linha 3 para atualização do PPRA.",
+      "title": "Levantamento de riscos â Linha 3",
+      "desc": "Mapear todos os riscos da linha 3 para atualizaÃ§Ã£o do PPRA.",
       "status": "pendente",
       "prio": "media",
       "unit": "Unidade A",
@@ -94,11 +164,19 @@
       "due": "2024-06-20",
       "by": "u1",
       "period": "unico",
-      "obs": [{ "by": "u1", "name": "Administrador", "dt": "2024-06-12", "txt": "Tarefa criada.", "t": "s" }]
+      "obs": [
+        {
+          "by": "u1",
+          "name": "Administrador",
+          "dt": "2024-06-12",
+          "txt": "Tarefa criada.",
+          "t": "s"
+        }
+      ]
     },
     {
       "id": "t3",
-      "title": "Treinamento NR-35 — Equipe Unidade B",
+      "title": "Treinamento NR-35 â Equipe Unidade B",
       "desc": "Conduzir treinamento de trabalho em altura. Responsabilidade CONJUNTA dos dois turnos.",
       "status": "pendente",
       "prio": "alta",
@@ -109,12 +187,20 @@
       "due": "2024-06-20",
       "by": "u1",
       "period": "unico",
-      "obs": [{ "by": "u1", "name": "Administrador", "dt": "2024-06-13", "txt": "Tarefa conjunta criada para diurno e noturno da Unidade B.", "t": "s" }]
+      "obs": [
+        {
+          "by": "u1",
+          "name": "Administrador",
+          "dt": "2024-06-13",
+          "txt": "Tarefa conjunta criada para diurno e noturno da Unidade B.",
+          "t": "s"
+        }
+      ]
     },
     {
       "id": "t4",
-      "title": "Auditoria de EPIs — Caldeiraria",
-      "desc": "Verificar validade e condições dos EPIs do setor de caldeiraria.",
+      "title": "Auditoria de EPIs â Caldeiraria",
+      "desc": "Verificar validade e condiÃ§Ãµes dos EPIs do setor de caldeiraria.",
       "status": "concluido",
       "prio": "baixa",
       "unit": "Unidade A",
@@ -125,14 +211,26 @@
       "by": "u1",
       "period": "unico",
       "obs": [
-        { "by": "u2", "name": "Carlos Mendonça", "dt": "2024-06-10", "txt": "Auditoria concluída. 3 EPIs precisam de substituição.", "t": "u" },
-        { "by": "u1", "name": "Administrador", "dt": "2024-06-10", "txt": "Status alterado para Concluído.", "t": "s" }
+        {
+          "by": "u2",
+          "name": "Carlos MendonÃ§a",
+          "dt": "2024-06-10",
+          "txt": "Auditoria concluÃ­da. 3 EPIs precisam de substituiÃ§Ã£o.",
+          "t": "u"
+        },
+        {
+          "by": "u1",
+          "name": "Administrador",
+          "dt": "2024-06-10",
+          "txt": "Status alterado para ConcluÃ­do.",
+          "t": "s"
+        }
       ]
     },
     {
       "id": "t5",
-      "title": "Investigação quase acidente — Setor B",
-      "desc": "Investigar evento de quase acidente. Preencher formulário de investigação.",
+      "title": "InvestigaÃ§Ã£o quase acidente â Setor B",
+      "desc": "Investigar evento de quase acidente. Preencher formulÃ¡rio de investigaÃ§Ã£o.",
       "status": "revisao",
       "prio": "alta",
       "unit": "Unidade B",
@@ -142,11 +240,19 @@
       "due": "2024-06-14",
       "by": "u1",
       "period": "unico",
-      "obs": [{ "by": "u5", "name": "Mariana Lima", "dt": "2024-06-10", "txt": "Iniciada entrevista com as testemunhas.", "t": "u" }]
+      "obs": [
+        {
+          "by": "u5",
+          "name": "Mariana Lima",
+          "dt": "2024-06-10",
+          "txt": "Iniciada entrevista com as testemunhas.",
+          "t": "u"
+        }
+      ]
     },
     {
       "id": "t6",
-      "title": "Atualização PPRA — Unidade C",
+      "title": "AtualizaÃ§Ã£o PPRA â Unidade C",
       "desc": "Revisar e atualizar o PPRA da Unidade C.",
       "status": "pendente",
       "prio": "media",
@@ -161,8 +267,8 @@
     },
     {
       "id": "t7",
-      "title": "Calibração dos equipamentos",
-      "desc": "Enviar equipamentos de medição para calibração anual.",
+      "title": "CalibraÃ§Ã£o dos equipamentos",
+      "desc": "Enviar equipamentos de mediÃ§Ã£o para calibraÃ§Ã£o anual.",
       "status": "andamento",
       "prio": "baixa",
       "unit": "Unidade A",
@@ -176,8 +282,8 @@
     },
     {
       "id": "t8",
-      "title": "Protocolo de emergência — Revisão geral",
-      "desc": "Revisão e atualização dos protocolos de emergência. Tarefa conjunta para todos os turnos.",
+      "title": "Protocolo de emergÃªncia â RevisÃ£o geral",
+      "desc": "RevisÃ£o e atualizaÃ§Ã£o dos protocolos de emergÃªncia. Tarefa conjunta para todos os turnos.",
       "status": "revisao",
       "prio": "media",
       "unit": "Unidade A",
@@ -187,7 +293,15 @@
       "due": "2024-06-18",
       "by": "u1",
       "period": "unico",
-      "obs": [{ "by": "u1", "name": "Administrador", "dt": "2024-06-12", "txt": "Tarefa conjunta — ambos os turnos devem participar.", "t": "s" }]
+      "obs": [
+        {
+          "by": "u1",
+          "name": "Administrador",
+          "dt": "2024-06-12",
+          "txt": "Tarefa conjunta â ambos os turnos devem participar.",
+          "t": "s"
+        }
+      ]
     }
   ],
   "messages": []
