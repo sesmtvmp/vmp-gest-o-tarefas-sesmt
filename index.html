@@ -381,7 +381,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
         <div class="toolbar"><span class="toolbar-title">Sincronização — Vercel KV</span></div>
         <div style="max-width:620px">
           <div class="info-box" style="margin-bottom:18px">
-            ✅ Este sistema usa <strong>Vercel KV</strong> para sincronização em tempo real. Todas as alterações feitas por qualquer usuário são salvas automaticamente e aparecem nos demais dispositivos em segundos. Nenhuma configuração adicional é necessária.
+            ✅ Este sistema usa <strong>Upstash Redis</strong> (via Vercel Marketplace) como banco de dados. Todas as alterações feitas por qualquer usuário são salvas automaticamente e aparecem nos demais dispositivos em segundos. Nenhuma configuração adicional é necessária após o deploy.
           </div>
           <div class="ss"><div class="ss-ttl">📡 Status da sincronização</div>
             <div id="kv-status-box" style="background:var(--bg3);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px">
@@ -407,11 +407,12 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
             <div id="kv-action-status" style="margin-top:10px;font-size:12px;color:var(--text3)"></div>
           </div>
           <div class="ss"><div class="ss-ttl">📋 Instruções de deploy</div>
-            <ol style="font-size:13px;color:var(--text2);line-height:2;padding-left:18px">
-              <li>No painel da Vercel, acesse seu projeto → <strong>Storage → Connect Store → KV</strong></li>
-              <li>Crie um KV store e conecte ao projeto (as env vars <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">KV_REST_API_URL</code> e <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">KV_REST_API_TOKEN</code> são adicionadas automaticamente)</li>
-              <li>Faça o deploy dos arquivos: <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">index.html</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">api/data.js</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">api/save.js</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">package.json</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">vercel.json</code></li>
-              <li>Pronto — todos os dispositivos sincronizam automaticamente a cada 10 segundos</li>
+            <ol style="font-size:13px;color:var(--text2);line-height:2.2;padding-left:18px">
+              <li>Suba os arquivos no GitHub: <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">index.html</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">api/data.js</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">api/save.js</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">package.json</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">vercel.json</code></li>
+              <li>Conecte o repositório à Vercel (Import Project)</li>
+              <li>No painel da Vercel: <strong>Storage → Marketplace → Upstash → Redis → Create &amp; Connect</strong></li>
+              <li>A Vercel adiciona automaticamente as env vars <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">UPSTASH_REDIS_REST_URL</code> e <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">UPSTASH_REDIS_REST_TOKEN</code></li>
+              <li>Faça um redeploy — pronto! Todos os dispositivos sincronizam a cada 10 segundos</li>
             </ol>
           </div>
         </div>

@@ -1,46 +1,45 @@
-import { kv } from '@vercel/kv';
+// GET /api/data
+// Reads sst:data from Upstash Redis via HTTP REST API.
+// Env vars set automatically when you connect Upstash on Vercel Marketplace:
+//   UPSTASH_REDIS_REST_URL
+//   UPSTASH_REDIS_REST_TOKEN
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  try {
-    const data = await kv.get('sst:data');
+  const url   = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-    if (!data) {
-      return res.status(200).json({
-        cfg: {
-          siteTitle: 'SST Manager',
-          sub: 'Gestão de Segurança do Trabalho',
-          hdr: 'SST Manager',
-          company: 'Empresa SST',
-          ftr: '© 2024 Empresa SST — Sistema de Gestão de SST',
-          ver: 'v1.0.0',
-          email: 'admin@empresa.com',
-          accent: '#3b82f6',
-          units: ['Unidade A', 'Unidade B', 'Unidade C']
-        },
-        users: [
-          {
-            id: 'u1', un: 'admin', pw: 'sesmtvmp', name: 'Administrador',
-            turno: 'diurno', units: ['Unidade A', 'Unidade B', 'Unidade C'],
-            p: { changeSelf: true, changeAll: true, addObs: true, editTask: true, manageTask: true, deleteTask: true, isAdmin: true },
-            active: true
-          }
-        ],
-        tasks: [],
-        messages: [],
-        updatedAt: new Date().toISOString()
-      });
+  if (!url || !token) {
+    // Running locally or Upstash not connected yet — return empty state
+    return res.status(200).json({ _empty: true });
+  }
+
+  try {
+    // Upstash REST: GET https://<url>/get/<key>
+    const r = await fetch(`${url}/get/sst:data`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!r.ok) throw new Error(`Upstash HTTP ${r.status}`);
+
+    const json = await r.json();
+
+    // Upstash returns { result: "<json-string>" } or { result: null }
+    if (!json.result) {
+      return res.status(200).json({ _empty: true });
     }
 
+    const data = JSON.parse(json.result);
     return res.status(200).json(data);
+
   } catch (err) {
-    console.error('[GET /api/data]', err);
-    return res.status(500).json({ error: 'Failed to load data', detail: err.message });
+    console.error('[GET /api/data]', err.message);
+    return res.status(500).json({ error: 'Failed to load', detail: err.message });
   }
 }
