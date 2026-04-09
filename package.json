@@ -1,8 +1,5 @@
 {
   "name": "sst-manager",
   "version": "1.0.0",
-  "description": "Sistema de Gestão de Segurança do Trabalho",
-  "engines": {
-    "node": "20.x"
-  }
+  "description": "Sistema de Gestão SST"
 }
