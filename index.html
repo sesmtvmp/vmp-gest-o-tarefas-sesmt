@@ -472,7 +472,11 @@ function setLastSync(dt){
 // LOAD from KV
 async function loadFromKV(manual=false){
   try{
-    const r = await fetch('/api/data?t=' + Date.now());
+    // 5s timeout to avoid hanging forever
+    const controller = new AbortController();
+    const tid = setTimeout(()=>controller.abort(), 5000);
+    const r = await fetch('/api/data?t=' + Date.now(), {signal: controller.signal});
+    clearTimeout(tid);
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     if(data.error) throw new Error(data.error);
@@ -574,17 +578,25 @@ function applyData(data, manual=false){
 
 // ============ INIT ============
 async function init(){
+  // Always show login after 8s max, even if API is unreachable
+  const timeout = setTimeout(()=>{
+    document.getElementById('loading-screen').style.display='none';
+    document.getElementById('login-screen').style.display='flex';
+  }, 8000);
+
   const loaded = await loadFromKV(false);
+  clearTimeout(timeout);
+
   if(!loaded){
-    // Fallback defaults when KV is not yet configured (local dev)
+    // Fallback defaults when KV is not yet configured (local dev / API 404)
     applyData({
       cfg:{siteTitle:'SST Manager',sub:'Gestão de Segurança do Trabalho',hdr:'SST Manager',company:'Empresa SST',ftr:'© 2024 Empresa SST',ver:'v1.0.0',email:'admin@empresa.com',accent:'#3b82f6',units:['Unidade A','Unidade B','Unidade C']},
       users:[{id:'u1',un:'admin',pw:'sesmtvmp',name:'Administrador',turno:'diurno',units:['Unidade A','Unidade B','Unidade C'],p:{changeSelf:true,changeAll:true,addObs:true,editTask:true,manageTask:true,deleteTask:true,isAdmin:true},active:true}],
       tasks:[],messages:[]
     });
   }
-  document.getElementById('loading-screen').style.display = 'none';
-  document.getElementById('login-screen').style.display  = 'flex';
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
 }
 
 // ============ LOGIN ============
