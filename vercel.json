@@ -1,15 +1,3 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "api/data.js": { "maxDuration": 10 },
-    "api/save.js": { "maxDuration": 10 }
-  },
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
-      ]
-    }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json"
 }
