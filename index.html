@@ -267,7 +267,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
         </div>
         <div class="nav-item" id="n-github" onclick="setView('github')">
           <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.5" d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
-          GitHub / Sync
+          Sync / KV
         </div>
       </div>
       <div class="sb-section">
@@ -376,34 +376,44 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
         </div>
       </div>
 
-      <!-- GITHUB SYNC -->
+      <!-- KV STATUS (admin only) -->
       <div id="v-github" style="display:none">
-        <div class="toolbar"><span class="toolbar-title">GitHub — Sincronização de dados</span></div>
+        <div class="toolbar"><span class="toolbar-title">Sincronização — Vercel KV</span></div>
         <div style="max-width:620px">
           <div class="info-box" style="margin-bottom:18px">
-            ℹ️ Configure seu repositório GitHub para que as alterações feitas pelo administrador sejam salvas no <strong>data.json</strong> e fiquem disponíveis para todos os dispositivos via Vercel.
+            ✅ Este sistema usa <strong>Upstash Redis</strong> (via Vercel Marketplace) como banco de dados. Todas as alterações feitas por qualquer usuário são salvas automaticamente e aparecem nos demais dispositivos em segundos. Nenhuma configuração adicional é necessária após o deploy.
           </div>
-          <div class="ss"><div class="ss-ttl">🔑 Credenciais do GitHub</div>
-            <div class="fg"><label class="flbl">Personal Access Token (ghp_...)</label>
-              <input class="finput" type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
-              <div style="font-size:11px;color:var(--text3);margin-top:4px">Crie em: GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic). Permissão necessária: <strong>repo</strong> (Contents write).</div>
+          <div class="ss"><div class="ss-ttl">📡 Status da sincronização</div>
+            <div id="kv-status-box" style="background:var(--bg3);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;font-size:13px">
+                <span style="color:var(--text2)">Última sincronização</span>
+                <span id="kv-last-sync" style="font-family:var(--mono);font-size:11px;color:var(--text3)">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13px">
+                <span style="color:var(--text2)">Polling automático</span>
+                <span style="color:var(--green);font-size:12px">● Ativo (10s)</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13px">
+                <span style="color:var(--text2)">Backend</span>
+                <span style="color:var(--accent2);font-size:12px">Vercel KV (Redis)</span>
+              </div>
             </div>
-            <div class="fgrid">
-              <div class="fg"><label class="flbl">Usuário/Organização GitHub</label><input class="finput" id="gh-owner" placeholder="seu-usuario"></div>
-              <div class="fg"><label class="flbl">Nome do repositório</label><input class="finput" id="gh-repo" placeholder="sst-manager"></div>
+          </div>
+          <div class="ss"><div class="ss-ttl">🔧 Ações manuais</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-p" onclick="saveToKV()">💾 Salvar agora</button>
+              <button class="btn" onclick="loadFromKV(true)">🔄 Recarregar dados</button>
             </div>
-            <div class="fg"><label class="flbl">Branch</label><input class="finput" id="gh-branch" placeholder="main" value="main"></div>
-            <button class="btn btn-p" onclick="saveGHConfig()">💾 Salvar configuração</button>
-            <button class="btn" onclick="testGHConnection()" style="margin-left:8px">🔌 Testar conexão</button>
+            <div id="kv-action-status" style="margin-top:10px;font-size:12px;color:var(--text3)"></div>
           </div>
-          <div class="ss"><div class="ss-ttl">📤 Publicar dados agora</div>
-            <p style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.6">Ao clicar abaixo, todos os dados atuais (tarefas, usuários, configurações, mensagens) serão salvos no arquivo <code style="background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--mono)">data.json</code> do repositório. A Vercel redeploy acontece automaticamente.</p>
-            <button class="btn btn-p" onclick="publishToGitHub()">🚀 Publicar data.json no GitHub</button>
-            <div id="gh-status" style="margin-top:12px;font-size:12px;color:var(--text3)"></div>
-          </div>
-          <div class="ss"><div class="ss-ttl">📥 Carregar dados do GitHub</div>
-            <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Carrega o <code style="background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--mono)">data.json</code> mais recente do repositório, sobrescrevendo os dados locais.</p>
-            <button class="btn" onclick="loadFromGitHub()">📥 Sincronizar do GitHub</button>
+          <div class="ss"><div class="ss-ttl">📋 Instruções de deploy</div>
+            <ol style="font-size:13px;color:var(--text2);line-height:2.2;padding-left:18px">
+              <li>Suba os arquivos no GitHub: <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">index.html</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">api/data.js</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">api/save.js</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">package.json</code>, <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">vercel.json</code></li>
+              <li>Conecte o repositório à Vercel (Import Project)</li>
+              <li>No painel da Vercel: <strong>Storage → Marketplace → Upstash → Redis → Create &amp; Connect</strong></li>
+              <li>A Vercel adiciona automaticamente as env vars <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">UPSTASH_REDIS_REST_URL</code> e <code style="background:var(--bg3);padding:1px 4px;border-radius:3px">UPSTASH_REDIS_REST_TOKEN</code></li>
+              <li>Faça um redeploy — pronto! Todos os dispositivos sincronizam a cada 10 segundos</li>
+            </ol>
           </div>
         </div>
       </div>
@@ -434,125 +444,158 @@ const overdue=t=>t.status!=='concluido'&&new Date(t.due)<today();
 const isRoot=u=>u&&u.un===ROOT_UN;
 const nowDt=()=>new Date().toISOString().slice(0,10);
 
-let S={cfg:{},users:[],tasks:[],messages:[]};
-let S_cu=null,S_qf=null;
-let GH={token:'',owner:'',repo:'',branch:'main'};
+// ============ VERCEL KV PERSISTENCE ============
+// All reads → GET /api/data
+// All writes → POST /api/save
+// Real-time: polling every 10s, merges remote changes without disrupting active UI
 
-// ============ GITHUB PERSISTENCE ============
-function ghKey(){return 'sst_gh_'+location.hostname;}
-function saveGHLocal(){localStorage.setItem(ghKey(),JSON.stringify(GH));}
-function loadGHLocal(){try{const d=JSON.parse(localStorage.getItem(ghKey())||'{}');GH={token:d.token||'',owner:d.owner||'',repo:d.repo||'',branch:d.branch||'main'};}catch(e){}}
+let _lastUpdatedAt = null;   // tracks last known server timestamp
+let _pollTimer = null;
+let _saveTimer = null;
+let _saving = false;
 
-async function loadFromGitHub(){
-  if(!GH.owner||!GH.repo){toast('Configure o GitHub primeiro (aba GitHub/Sync)','e');return;}
-  const url=`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/data.json?ref=${GH.branch}&t=${Date.now()}`;
+function showSaving(b){
+  document.getElementById('saving-ind').style.display = b ? 'flex' : 'none';
+}
+
+function setKVStatus(msg, color='var(--text3)'){
+  const el = document.getElementById('kv-action-status');
+  if(el) el.innerHTML = `<span style="color:${color}">${msg}</span>`;
+}
+
+function setLastSync(dt){
+  _lastUpdatedAt = dt;
+  const el = document.getElementById('kv-last-sync');
+  if(el && dt) el.textContent = new Date(dt).toLocaleString('pt-BR');
+}
+
+// LOAD from KV
+async function loadFromKV(manual=false){
   try{
-    const r=await fetch(url,{headers:GH.token?{Authorization:`token ${GH.token}`}:{}});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const j=await r.json();
-    const txt=atob(j.content.replace(/\n/g,''));
-    const data=JSON.parse(txt);
-    applyData(data);
-    toast('Dados sincronizados do GitHub!','s');
+    // 5s timeout to avoid hanging forever
+    const controller = new AbortController();
+    const tid = setTimeout(()=>controller.abort(), 5000);
+    const r = await fetch('/api/data?t=' + Date.now(), {signal: controller.signal});
+    clearTimeout(tid);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if(data.error) throw new Error(data.error);
+    // _empty means KV has no data yet — treat as not loaded so fallback kicks in
+    if(data._empty) return false;
+    applyData(data, manual);
+    setLastSync(data.updatedAt);
+    if(manual){ toast('Dados atualizados!','s'); setKVStatus('✅ Dados carregados em ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)'); }
     return true;
   }catch(e){
-    console.warn('GitHub load failed:',e.message);
+    console.warn('[KV load]', e.message);
+    if(manual){ toast('Erro ao carregar: ' + e.message,'e'); setKVStatus('❌ Erro: ' + e.message, 'var(--red)'); }
     return false;
   }
 }
 
-async function publishToGitHub(){
-  if(!GH.token||!GH.owner||!GH.repo){toast('Configure e salve as credenciais do GitHub primeiro.','e');return;}
-  const st=document.getElementById('gh-status');
-  if(st)st.innerHTML='<span style="color:var(--amber)">⏳ Publicando...</span>';
+// SAVE to KV
+async function saveToKV(){
+  if(_saving) return;
+  _saving = true;
   showSaving(true);
-  const data=getDataSnapshot();
-  const content=btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2))));
-  const url=`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/data.json`;
   try{
-    // Get current SHA
-    const gr=await fetch(url+'?ref='+GH.branch,{headers:{Authorization:`token ${GH.token}`,'Accept':'application/vnd.github.v3+json'}});
-    let sha='';
-    if(gr.ok){const gj=await gr.json();sha=gj.sha||'';}
-    const body={message:'SST: update data.json — '+new Date().toLocaleString('pt-BR'),content,branch:GH.branch};
-    if(sha)body.sha=sha;
-    const pr=await fetch(url,{method:'PUT',headers:{Authorization:`token ${GH.token}`,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify(body)});
-    if(!pr.ok){const err=await pr.json();throw new Error(err.message||'PUT failed');}
-    if(st)st.innerHTML='<span style="color:var(--green)">✅ Publicado com sucesso! Vercel redeploy iniciado.</span>';
-    toast('data.json publicado no GitHub!','s');
+    const payload = { cfg: S.cfg, users: S.users, tasks: S.tasks, messages: S.messages };
+    const r = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const res = await r.json();
+    if(res.error) throw new Error(res.error);
+    setLastSync(res.updatedAt);
+    setKVStatus('✅ Salvo em ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
   }catch(e){
-    if(st)st.innerHTML=`<span style="color:var(--red)">❌ Erro: ${e.message}</span>`;
-    toast('Erro ao publicar: '+e.message,'e');
-  }finally{showSaving(false);}
-}
-
-async function testGHConnection(){
-  const token=document.getElementById('gh-token').value.trim();
-  const owner=document.getElementById('gh-owner').value.trim();
-  const repo=document.getElementById('gh-repo').value.trim();
-  if(!token||!owner||!repo){toast('Preencha todos os campos','e');return;}
-  const st=document.getElementById('gh-status');
-  if(st)st.innerHTML='<span style="color:var(--amber)">⏳ Testando...</span>';
-  try{
-    const r=await fetch(`https://api.github.com/repos/${owner}/${repo}`,{headers:{Authorization:`token ${token}`}});
-    if(r.ok){if(st)st.innerHTML='<span style="color:var(--green)">✅ Conexão bem-sucedida!</span>';toast('Conexão OK!','s');}
-    else throw new Error('HTTP '+r.status);
-  }catch(e){if(st)st.innerHTML=`<span style="color:var(--red)">❌ Falhou: ${e.message}</span>`;toast('Falhou: '+e.message,'e');}
-}
-
-function saveGHConfig(){
-  GH.token=document.getElementById('gh-token').value.trim();
-  GH.owner=document.getElementById('gh-owner').value.trim();
-  GH.repo=document.getElementById('gh-repo').value.trim();
-  GH.branch=document.getElementById('gh-branch').value.trim()||'main';
-  saveGHLocal();
-  toast('Configuração do GitHub salva!','s');
-}
-
-function getDataSnapshot(){return {cfg:S.cfg,users:S.users,tasks:S.tasks,messages:S.messages};}
-
-function applyData(data){
-  if(data.cfg)S.cfg=data.cfg;
-  if(data.users)S.users=data.users;
-  if(data.tasks)S.tasks=data.tasks;
-  if(data.messages)S.messages=data.messages||[];
-  applySettings();
-  if(S_cu){
-    updateCounts();renderKanban();
-    if(document.getElementById('v-msgs').style.display!=='none')renderMsgs();
+    console.warn('[KV save]', e.message);
+    toast('Erro ao salvar: ' + e.message,'e');
+    setKVStatus('❌ Erro ao salvar: ' + e.message, 'var(--red)');
+  }finally{
+    _saving = false;
+    showSaving(false);
   }
 }
 
-function showSaving(b){document.getElementById('saving-ind').style.display=b?'flex':'none';}
-
-// Auto-save to GitHub (debounced)
-let saveTimer=null;
+// Debounced auto-save (1.5s after last change)
 function scheduleAutoSave(){
-  if(!GH.token||!GH.owner||!GH.repo)return;
-  clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>publishToGitHub(),3000);
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => saveToKV(), 1500);
+}
+
+// Polling: every 10s check if server has newer data than what we have
+function startPolling(){
+  stopPolling();
+  _pollTimer = setInterval(async () => {
+    if(_saving) return; // don't poll while we're mid-save
+    try{
+      const r = await fetch('/api/data?t=' + Date.now());
+      if(!r.ok) return;
+      const data = await r.json();
+      if(data.error) return;
+      // Only apply if server has newer data than our last known state
+      if(data.updatedAt && data.updatedAt !== _lastUpdatedAt){
+        applyData(data, false);
+        setLastSync(data.updatedAt);
+      }
+    }catch(e){ /* silent — no toast on background poll */ }
+  }, 10000);
+}
+
+function stopPolling(){
+  if(_pollTimer){ clearInterval(_pollTimer); _pollTimer = null; }
+}
+
+function getDataSnapshot(){ return {cfg:S.cfg,users:S.users,tasks:S.tasks,messages:S.messages}; }
+
+function applyData(data, manual=false){
+  const prevUser = S_cu ? S.users.find(u=>u.id===S_cu.id) : null;
+
+  if(data.cfg)      S.cfg      = data.cfg;
+  if(data.users)    S.users    = data.users;
+  if(data.tasks)    S.tasks    = data.tasks;
+  if(data.messages) S.messages = data.messages || [];
+
+  // Re-sync S_cu reference in case user list was reloaded
+  if(S_cu){
+    const fresh = S.users.find(u => u.id === S_cu.id);
+    if(fresh) S_cu = fresh;
+  }
+
+  applySettings();
+
+  if(S_cu){
+    updateCounts();
+    // Only re-render Kanban if not currently dragging
+    if(!dragId) renderKanban();
+    // Re-render list if visible
+    if(document.getElementById('v-list').style.display !== 'none') renderList();
+    // Re-render messages if visible
+    if(document.getElementById('v-msgs').style.display !== 'none') renderMsgs();
+  }
 }
 
 // ============ INIT ============
 async function init(){
-  loadGHLocal();
-  // Try to load data.json from same origin (works on Vercel)
-  let loaded=false;
-  try{
-    const r=await fetch('./data.json?t='+Date.now());
-    if(r.ok){const data=await r.json();applyData(data);loaded=true;}
-  }catch(e){}
+  // Always show login after 8s max, even if API is unreachable
+  const timeout = setTimeout(()=>{
+    document.getElementById('loading-screen').style.display='none';
+    document.getElementById('login-screen').style.display='flex';
+  }, 8000);
+
+  const loaded = await loadFromKV(false);
+  clearTimeout(timeout);
+
   if(!loaded){
-    // Fallback: try GitHub
-    if(GH.owner&&GH.repo){await loadFromGitHub();}
-    else {
-      // Use inline defaults
-      applyData({
-        cfg:{siteTitle:'SST Manager',sub:'Gestão de Segurança do Trabalho',hdr:'SST Manager',company:'Empresa SST',ftr:'© 2024 Empresa SST — Sistema de Gestão de SST',ver:'v1.0.0',email:'admin@empresa.com',accent:'#3b82f6',units:['Unidade A','Unidade B','Unidade C']},
-        users:[{id:'u1',un:'admin',pw:'sesmtvmp',name:'Administrador',turno:'diurno',units:['Unidade A','Unidade B','Unidade C'],p:{changeSelf:true,changeAll:true,addObs:true,editTask:true,manageTask:true,deleteTask:true,isAdmin:true},active:true}],
-        tasks:[],messages:[]
-      });
-    }
+    // Fallback defaults when KV is not yet configured (local dev / API 404)
+    applyData({
+      cfg:{siteTitle:'SST Manager',sub:'Gestão de Segurança do Trabalho',hdr:'SST Manager',company:'Empresa SST',ftr:'© 2024 Empresa SST',ver:'v1.0.0',email:'admin@empresa.com',accent:'#3b82f6',units:['Unidade A','Unidade B','Unidade C']},
+      users:[{id:'u1',un:'admin',pw:'sesmtvmp',name:'Administrador',turno:'diurno',units:['Unidade A','Unidade B','Unidade C'],p:{changeSelf:true,changeAll:true,addObs:true,editTask:true,manageTask:true,deleteTask:true,isAdmin:true},active:true}],
+      tasks:[],messages:[]
+    });
   }
   document.getElementById('loading-screen').style.display='none';
   document.getElementById('login-screen').style.display='flex';
@@ -588,17 +631,12 @@ function doLogin(){
   document.getElementById('ha').style.background=abg(i);
   document.getElementById('ha').style.color=atc(i);
   applySettings();populateFilters();updateCounts();renderKanban();updateMsgBadge();
-  // If admin, populate GH config fields
-  if(isRoot(u)||u.p.isAdmin){
-    document.getElementById('gh-token').value=GH.token;
-    document.getElementById('gh-owner').value=GH.owner;
-    document.getElementById('gh-repo').value=GH.repo;
-    document.getElementById('gh-branch').value=GH.branch||'main';
-  }
+  startPolling(); // begin real-time sync for all users
 }
 
 function doLogout(){
   S_cu=null;
+  stopPolling();
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
   document.getElementById('adm-nav').style.display='none';
@@ -1270,8 +1308,8 @@ function saveSettings(){
   S.cfg.ver=document.getElementById('c-ver').value;
   S.cfg.email=document.getElementById('c-email').value;
   applySettings();
-  publishToGitHub();
-  toast('Configurações salvas e publicadas!','s');
+  saveToKV();
+  toast('Configurações salvas!','s');
 }
 
 // ============ MODAL / TOAST ============
