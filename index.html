@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">SST Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f1117;--bg2:#161b27;--bg3:#1e2535;--bg4:#252d3d;
+  --border:#2a3348;--border2:#3a4560;
+  --text:#e8ecf4;--text2:#8b96b0;--text3:#5a6580;
+  --accent:#3b82f6;--accent2:#60a5fa;
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--purple:#a855f7;
+  --font:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
+  --r:8px;--rl:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* LOADING */
+#loading-screen{position:fixed;inset:0;background:var(--bg);z-index:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.loader{width:40px;height:40px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-txt{font-size:13px;color:var(--text3)}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:var(--bg);z-index:500;display:none;align-items:center;justify-content:center}
+.login-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:2.5rem;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:2rem}
+.lmark{width:44px;height:44px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;font-family:var(--mono)}
+.login-ttl{font-size:20px;font-weight:700}
+.login-sub{font-size:12px;color:var(--text3)}
+
+/* APP */
+#app{display:none;height:100vh;flex-direction:column}
+#hdr{background:var(--bg2);border-bottom:1px solid var(--border);height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;position:sticky;top:0;z-index:100;flex-shrink:0}
+#body{display:flex;flex:1;overflow:hidden}
+#sidebar{width:210px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+#content{flex:1;overflow-y:auto;padding:1.25rem}
+#ftr{background:var(--bg2);border-top:1px solid var(--border);padding:8px 1.25rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+
+/* HEADER */
+.hdr-left{display:flex;align-items:center;gap:10px}
+.hdr-mark{width:30px;height:30px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;font-family:var(--mono)}
+#hdr-title{font-size:14px;font-weight:600}
+#hdr-sub{font-size:11px;color:var(--text3)}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.user-pill{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 10px 3px 5px;cursor:pointer;font-size:13px}
+.user-pill:hover{border-color:var(--border2)}
+
+/* SIDEBAR */
+.sb-section{padding:10px 0 2px}
+.sb-lbl{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:0 14px 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 14px;cursor:pointer;color:var(--text2);font-size:13px;border-left:2px solid transparent;transition:all .12s;user-select:none}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.nav-item.active{color:var(--accent2);background:rgba(59,130,246,.07);border-left-color:var(--accent)}
+.sc{margin-left:auto;background:var(--bg4);color:var(--text3);font-size:10px;font-family:var(--mono);padding:1px 6px;border-radius:8px}
+.sc.hot{background:rgba(239,68,68,.15);color:var(--red)}
+.sc.new{background:rgba(168,85,247,.15);color:#d8b4fe}
+.sb-bottom{margin-top:auto;padding:10px;border-top:1px solid var(--border)}
+.mini-g{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mini-c{background:var(--bg3);border-radius:6px;padding:8px;text-align:center}
+.mini-v{font-size:20px;font-weight:600;font-family:var(--mono)}
+.mini-l{font-size:10px;color:var(--text3);margin-top:1px}
+
+/* BUTTONS */
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:1.125rem;flex-wrap:wrap}
+.toolbar-title{font-size:16px;font-weight:600}
+.fbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:1.125rem}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:0 12px;height:32px;border:1px solid var(--border2);border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;background:transparent;color:var(--text);transition:all .12s;font-family:var(--font);white-space:nowrap}
+.btn:hover{background:var(--bg3)}
+.btn-p{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-p:hover{background:#2563eb}
+.btn-d{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25);color:var(--red)}
+.btn-d:hover{background:rgba(239,68,68,.15)}
+.btn-sm{height:26px;padding:0 8px;font-size:11px}
+.btn-lg{height:40px;padding:0 20px;font-size:14px;justify-content:center}
+input.fi,select.fi{height:30px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:0 9px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;transition:border .12s}
+input.fi:focus,select.fi:focus{border-color:var(--accent)}
+
+/* KANBAN */
+.kb-wrap{display:flex;gap:14px;overflow-x:auto;padding-bottom:.75rem;align-items:flex-start}
+.kb-col{flex:0 0 270px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);display:flex;flex-direction:column;max-height:calc(100vh - 190px)}
+.kb-hdr{padding:10px 12px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--border);flex-shrink:0}
+.col-dot{width:7px;height:7px;border-radius:50%}
+.col-ttl{font-size:12px;font-weight:600}
+.col-n{margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--text3);background:var(--bg4);padding:1px 6px;border-radius:8px}
+.kb-body{padding:8px;overflow-y:auto;display:flex;flex-direction:column;gap:7px;flex:1}
+.tc{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:11px;cursor:pointer;transition:all .12s;position:relative;overflow:hidden}
+.tc:hover{border-color:var(--border2);background:var(--bg4)}
+.tc.joint{border-left:2px solid var(--purple)}
+.tc-title{font-size:13px;font-weight:500;margin-bottom:5px;line-height:1.4;padding-right:54px}
+.tc-desc{font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tc-meta{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.tc-foot{display:flex;justify-content:space-between;align-items:center;margin-top:7px;padding-top:7px;border-top:1px solid var(--border)}
+.tc-acts{display:flex;gap:3px;position:absolute;top:8px;right:8px;opacity:0;transition:opacity .12s}
+.tc:hover .tc-acts{opacity:1}
+.ib{width:22px;height:22px;border:none;background:transparent;cursor:pointer;color:var(--text3);border-radius:4px;display:flex;align-items:center;justify-content:center;transition:all .12s;font-size:12px}
+.ib:hover{background:var(--bg4);color:var(--text)}
+.ib.del:hover{background:rgba(239,68,68,.12);color:var(--red)}
+.add-btn{margin:6px 8px;padding:7px;border:1px dashed var(--border);border-radius:var(--r);color:var(--text3);font-size:12px;cursor:pointer;text-align:center;transition:all .12s;background:transparent;font-family:var(--font);width:calc(100% - 16px)}
+.add-btn:hover{border-color:var(--accent);color:var(--accent)}
+.pbar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:var(--r) 0 0 var(--r)}
+.pa{background:var(--red)}.pm{background:var(--amber)}.pb{background:var(--green)}
+.prog{height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px}
+.prog-f{height:100%;border-radius:2px;transition:width .3s}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;font-size:10px;font-weight:500;padding:2px 7px;border-radius:999px;font-family:var(--mono);white-space:nowrap}
+.b-blue{background:rgba(59,130,246,.13);color:#93c5fd}
+.b-green{background:rgba(34,197,94,.13);color:#86efac}
+.b-amber{background:rgba(245,158,11,.13);color:#fcd34d}
+.b-red{background:rgba(239,68,68,.13);color:#fca5a5}
+.b-purple{background:rgba(168,85,247,.13);color:#d8b4fe}
+.b-gray{background:rgba(100,116,139,.12);color:#94a3b8}
+.avatar{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0}
+
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;display:flex;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(3px)}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.55)}
+.modal-lg{max-width:720px}
+.modal-hdr{padding:16px 18px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg2);z-index:1}
+.modal-ttl{font-size:14px;font-weight:600}
+.modal-body{padding:18px}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.fg{margin-bottom:13px}
+.flbl{font-size:11px;font-weight:500;color:var(--text2);margin-bottom:4px;display:block}
+.finput{width:100%;height:34px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:0 9px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;transition:border .12s}
+.finput:focus{border-color:var(--accent)}
+.fsel{width:100%;height:34px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:0 9px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;cursor:pointer}
+.fta{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 9px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;resize:vertical;min-height:72px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sep{height:1px;background:var(--border);margin:14px 0}
+.cb-g{display:flex;flex-direction:column;gap:5px}
+.cb-item{display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer}
+.cb-item input{accent-color:var(--accent);width:13px;height:13px}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+
+/* TABLE */
+.tw{overflow-x:auto}
+.dt{width:100%;border-collapse:collapse}
+.dt th{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.dt td{padding:9px 10px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+.dt tr:last-child td{border-bottom:none}
+.dt tr:hover td{background:rgba(255,255,255,.02)}
+
+/* USERS */
+.ucard{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rl);padding:14px;display:flex;gap:12px}
+.ug{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px}
+.uc-name{font-size:14px;font-weight:600;margin-bottom:2px}
+.uc-meta{font-size:12px;color:var(--text2);display:flex;gap:10px;flex-wrap:wrap;margin-bottom:7px}
+.ptag{font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,.08);color:#93c5fd;border:1px solid rgba(59,130,246,.18)}
+.ptag.adm{background:rgba(168,85,247,.08);color:#d8b4fe;border-color:rgba(168,85,247,.18)}
+.ptag.root{background:rgba(239,68,68,.08);color:#fca5a5;border-color:rgba(239,68,68,.18)}
+
+/* OBS */
+.obs-log{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.obs-item{background:var(--bg3);border-radius:var(--r);padding:9px 11px;border-left:3px solid var(--border2)}
+.obs-sys{border-left-color:var(--accent)}
+.obs-usr{border-left-color:var(--green)}
+.obs-meta{font-size:10px;color:var(--text3);margin-bottom:3px;display:flex;gap:8px}
+.obs-txt{font-size:12px;color:var(--text2);line-height:1.5}
+
+/* SETTINGS */
+.ss{margin-bottom:22px}
+.ss-ttl{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+.accent-o{width:28px;height:28px;border-radius:50%;cursor:pointer;transition:transform .12s;flex-shrink:0}
+.accent-o:hover{transform:scale(1.15)}
+
+/* MESSAGES / CONTACT */
+.msg-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rl);padding:14px;margin-bottom:10px}
+.msg-card.unread{border-left:3px solid var(--purple)}
+.msg-card.replied{border-left:3px solid var(--green)}
+.msg-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.msg-from{font-size:13px;font-weight:600}
+.msg-date{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.msg-type{font-size:10px;padding:2px 7px;border-radius:999px;font-family:var(--mono)}
+.msg-body{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:10px}
+.msg-reply{background:var(--bg4);border-radius:var(--r);padding:10px;border-left:3px solid var(--green);margin-top:8px}
+.msg-reply-lbl{font-size:10px;color:var(--green);margin-bottom:4px;font-weight:600}
+.msg-reply-txt{font-size:12px;color:var(--text2);line-height:1.5}
+
+/* TOAST */
+.toast-ct{position:fixed;bottom:18px;right:18px;z-index:999;display:flex;flex-direction:column;gap:7px}
+.toast{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:9px 13px;font-size:13px;display:flex;align-items:center;gap:8px;min-width:240px;animation:toastIn .18s ease;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.toast.s{border-left:3px solid var(--green)}.toast.e{border-left:3px solid var(--red)}.toast.i{border-left:3px solid var(--accent)}
+@keyframes toastIn{from{transform:translateX(16px);opacity:0}to{transform:translateX(0);opacity:1}}
+#ftr-txt{font-size:11px;color:var(--text3)}
+#ftr-ver{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.empty{text-align:center;padding:2.5rem;color:var(--text3);font-size:13px}
+.info-box{font-size:12px;color:var(--amber);background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);border-radius:var(--r);padding:8px 11px}
+.locked-badge{font-size:10px;color:#fca5a5;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.18);border-radius:4px;padding:1px 7px;font-family:var(--mono)}
+.saving-indicator{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px}
+.saving-dot{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="loader"></div>
+  <div class="loader-txt">Carregando sistema...</div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-wrap">
+    <div class="login-logo">
+      <div class="lmark" id="l-mark">SST</div>
+      <div><div class="login-ttl" id="l-title">SST Manager</div><div class="login-sub">Segurança do Trabalho</div></div>
+    </div>
+    <div class="fg"><label class="flbl">Usuário</label><input class="finput" id="lu" type="text" placeholder="nome.usuario" autocomplete="username"></div>
+    <div class="fg"><label class="flbl">Senha</label><input class="finput" id="lp" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn btn-p btn-lg" style="width:100%;margin-top:4px" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div id="hdr">
+    <div class="hdr-left">
+      <div class="hdr-mark">SST</div>
+      <div><div id="hdr-title">SST Manager</div><div id="hdr-sub">Gestão de Segurança do Trabalho</div></div>
+    </div>
+    <div class="hdr-right">
+      <span id="saving-ind" style="display:none" class="saving-indicator"><span class="saving-dot"></span>Salvando...</span>
+      <div class="user-pill" onclick="showUserMenu()">
+        <div class="avatar" id="ha" style="background:rgba(59,130,246,.18);color:#93c5fd">AD</div>
+        <span id="hname">Admin</span><span style="color:var(--text3);font-size:11px">▾</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="body">
+    <div id="sidebar">
+      <div class="sb-section">
+        <div class="sb-lbl">Tarefas</div>
+        <div class="nav-item active" id="n-kanban" onclick="setView('kanban')">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="18" rx="1" stroke-width="1.5"/><rect x="14" y="3" width="7" height="11" rx="1" stroke-width="1.5"/></svg>
+          Kanban<span class="sc" id="sc-k">0</span>
+        </div>
+        <div class="nav-item" id="n-list" onclick="setView('list')">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.5" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+          Lista
+        </div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-lbl">Comunicação</div>
+        <div class="nav-item" id="n-msgs" onclick="setView('msgs')">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.5" d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          Mensagens<span class="sc new" id="sc-msgs">0</span>
+        </div>
+      </div>
+      <div class="sb-section" id="adm-nav" style="display:none">
+        <div class="sb-lbl">Administração</div>
+        <div class="nav-item" id="n-users" onclick="setView('users')">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.5" d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4" stroke-width="1.5"/><path stroke-width="1.5" d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          Usuários
+        </div>
+        <div class="nav-item" id="n-cfg" onclick="setView('cfg')">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke-width="1.5"/><path stroke-width="1.5" d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Configurações
+        </div>
+        <div class="nav-item" id="n-github" onclick="setView('github')">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.5" d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+          GitHub / Sync
+        </div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-lbl">Status</div>
+        <div class="nav-item" onclick="setQF('atrasado')"><span style="color:var(--red)">●</span> Atrasadas<span class="sc hot" id="sc-at">0</span></div>
+        <div class="nav-item" onclick="setQF('andamento')"><span style="color:var(--amber)">●</span> Em andamento<span class="sc" id="sc-and">0</span></div>
+        <div class="nav-item" onclick="setQF('concluido')"><span style="color:var(--green)">●</span> Concluídas<span class="sc" id="sc-ok">0</span></div>
+        <div class="nav-item" onclick="setQF(null)"><span style="color:var(--text3)">●</span> Todas</div>
+      </div>
+      <div class="sb-bottom">
+        <div class="mini-g">
+          <div class="mini-c"><div class="mini-v" id="sb-tot">0</div><div class="mini-l">Total</div></div>
+          <div class="mini-c"><div class="mini-v" id="sb-ok" style="color:var(--green)">0</div><div class="mini-l">Concluídas</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="content">
+      <!-- KANBAN -->
+      <div id="v-kanban">
+        <div class="toolbar">
+          <span class="toolbar-title">Quadro de Tarefas</span>
+          <div class="fbar" style="margin-bottom:0">
+            <input class="fi" id="fi-q" placeholder="🔍 Buscar..." oninput="renderKanban()" style="width:170px">
+            <select class="fi" id="fi-unit" onchange="renderKanban()"><option value="">Todas unidades</option></select>
+            <select class="fi" id="fi-turno" onchange="renderKanban()">
+              <option value="">Todos turnos</option>
+              <option value="diurno">🌞 Diurno</option>
+              <option value="noturno">🌙 Noturno</option>
+            </select>
+            <select class="fi" id="fi-per" onchange="renderKanban()">
+              <option value="">Qualquer prazo</option>
+              <option value="hoje">Hoje</option>
+              <option value="semana">Esta semana</option>
+              <option value="mes">Este mês</option>
+              <option value="atrasado">Atrasadas</option>
+            </select>
+          </div>
+          <button class="btn btn-p" id="btn-nt" style="display:none" onclick="openTaskModal()">+ Nova Tarefa</button>
+        </div>
+        <div class="kb-wrap" id="kboard"></div>
+      </div>
+
+      <!-- LIST -->
+      <div id="v-list" style="display:none">
+        <div class="toolbar">
+          <span class="toolbar-title">Lista de Tarefas</span>
+          <button class="btn btn-p" id="btn-ntl" style="display:none" onclick="openTaskModal()">+ Nova Tarefa</button>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl)">
+          <div class="tw"><table class="dt"><thead><tr><th>Título</th><th>Responsável</th><th>Unidade</th><th>Turno</th><th>Prazo</th><th>Status</th><th>Prio.</th><th>Ações</th></tr></thead><tbody id="lt-body"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- MESSAGES -->
+      <div id="v-msgs" style="display:none">
+        <div class="toolbar">
+          <span class="toolbar-title" id="msgs-title">Mensagens</span>
+          <button class="btn btn-p" id="btn-new-msg" onclick="openNewMsgModal()" style="display:none">✉️ Nova mensagem</button>
+        </div>
+        <div id="msgs-list"></div>
+      </div>
+
+      <!-- USERS -->
+      <div id="v-users" style="display:none">
+        <div class="toolbar"><span class="toolbar-title">Gestão de Usuários</span><button class="btn btn-p" onclick="openUserModal()">+ Novo Usuário</button></div>
+        <div class="ug" id="ugrid"></div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div id="v-cfg" style="display:none">
+        <div class="toolbar"><span class="toolbar-title">Configurações do Sistema</span></div>
+        <div style="max-width:660px">
+          <div class="ss"><div class="ss-ttl">🏢 Identidade</div>
+            <div class="fgrid">
+              <div class="fg"><label class="flbl">Título do site</label><input class="finput" id="c-stitle" oninput="applySettings()"></div>
+              <div class="fg"><label class="flbl">Subtítulo</label><input class="finput" id="c-sub" oninput="applySettings()"></div>
+              <div class="fg"><label class="flbl">Cabeçalho</label><input class="finput" id="c-hdr" oninput="applySettings()"></div>
+              <div class="fg"><label class="flbl">Empresa</label><input class="finput" id="c-company"></div>
+            </div>
+          </div>
+          <div class="ss"><div class="ss-ttl">🦶 Rodapé</div>
+            <div class="fgrid">
+              <div class="fg"><label class="flbl">Texto do rodapé</label><input class="finput" id="c-ftr" oninput="applySettings()"></div>
+              <div class="fg"><label class="flbl">Versão</label><input class="finput" id="c-ver" oninput="applySettings()"></div>
+            </div>
+          </div>
+          <div class="ss"><div class="ss-ttl">📧 E-mail do administrador</div>
+            <div class="fg"><label class="flbl">E-mail para receber alertas de tarefas</label><input class="finput" id="c-email"></div>
+          </div>
+          <div class="ss"><div class="ss-ttl">🏗️ Unidades</div>
+            <div id="ul" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+            <div style="display:flex;gap:8px"><input class="finput" id="nu-in" placeholder="Nova unidade..." style="flex:1"><button class="btn btn-p" onclick="addUnit()">Adicionar</button></div>
+          </div>
+          <div class="ss"><div class="ss-ttl">🎨 Cor de destaque</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <div class="accent-o" style="background:#3b82f6" onclick="setAccent('#3b82f6')" data-c="#3b82f6"></div>
+              <div class="accent-o" style="background:#8b5cf6" onclick="setAccent('#8b5cf6')" data-c="#8b5cf6"></div>
+              <div class="accent-o" style="background:#06b6d4" onclick="setAccent('#06b6d4')" data-c="#06b6d4"></div>
+              <div class="accent-o" style="background:#10b981" onclick="setAccent('#10b981')" data-c="#10b981"></div>
+              <div class="accent-o" style="background:#f59e0b" onclick="setAccent('#f59e0b')" data-c="#f59e0b"></div>
+              <div class="accent-o" style="background:#ef4444" onclick="setAccent('#ef4444')" data-c="#ef4444"></div>
+            </div>
+          </div>
+          <button class="btn btn-p" style="height:36px" onclick="saveSettings()">💾 Salvar e publicar configurações</button>
+        </div>
+      </div>
+
+      <!-- GITHUB SYNC -->
+      <div id="v-github" style="display:none">
+        <div class="toolbar"><span class="toolbar-title">GitHub — Sincronização de dados</span></div>
+        <div style="max-width:620px">
+          <div class="info-box" style="margin-bottom:18px">
+            ℹ️ Configure seu repositório GitHub para que as alterações feitas pelo administrador sejam salvas no <strong>data.json</strong> e fiquem disponíveis para todos os dispositivos via Vercel.
+          </div>
+          <div class="ss"><div class="ss-ttl">🔑 Credenciais do GitHub</div>
+            <div class="fg"><label class="flbl">Personal Access Token (ghp_...)</label>
+              <input class="finput" type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">Crie em: GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic). Permissão necessária: <strong>repo</strong> (Contents write).</div>
+            </div>
+            <div class="fgrid">
+              <div class="fg"><label class="flbl">Usuário/Organização GitHub</label><input class="finput" id="gh-owner" placeholder="seu-usuario"></div>
+              <div class="fg"><label class="flbl">Nome do repositório</label><input class="finput" id="gh-repo" placeholder="sst-manager"></div>
+            </div>
+            <div class="fg"><label class="flbl">Branch</label><input class="finput" id="gh-branch" placeholder="main" value="main"></div>
+            <button class="btn btn-p" onclick="saveGHConfig()">💾 Salvar configuração</button>
+            <button class="btn" onclick="testGHConnection()" style="margin-left:8px">🔌 Testar conexão</button>
+          </div>
+          <div class="ss"><div class="ss-ttl">📤 Publicar dados agora</div>
+            <p style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.6">Ao clicar abaixo, todos os dados atuais (tarefas, usuários, configurações, mensagens) serão salvos no arquivo <code style="background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--mono)">data.json</code> do repositório. A Vercel redeploy acontece automaticamente.</p>
+            <button class="btn btn-p" onclick="publishToGitHub()">🚀 Publicar data.json no GitHub</button>
+            <div id="gh-status" style="margin-top:12px;font-size:12px;color:var(--text3)"></div>
+          </div>
+          <div class="ss"><div class="ss-ttl">📥 Carregar dados do GitHub</div>
+            <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Carrega o <code style="background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--mono)">data.json</code> mais recente do repositório, sobrescrevendo os dados locais.</p>
+            <button class="btn" onclick="loadFromGitHub()">📥 Sincronizar do GitHub</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ftr"><span id="ftr-txt">© 2024 SST Manager</span><span id="ftr-ver">v1.0.0</span></div>
+</div>
+
+<div class="toast-ct" id="tc"></div>
+<div id="mc"></div>
+
+<script>
+// ============ CONSTANTS ============
+const COLS=[{k:'pendente',l:'Pendente',c:'#64748b'},{k:'andamento',l:'Em Andamento',c:'#f59e0b'},{k:'revisao',l:'Em Revisão',c:'#a855f7'},{k:'concluido',l:'Concluído',c:'#22c55e'}];
+const PL={changeSelf:'Alterar próprio status',changeAll:'Alterar qualquer status',addObs:'Adicionar observações',editTask:'Editar tarefas',manageTask:'Criar/replicar tarefas',deleteTask:'Excluir tarefas',isAdmin:'Administrador'};
+const ROOT_UN='admin';
+const MSG_TYPES=['Solicitação','Sugestão','Crítica','Dúvida','Outro'];
+const AVC=['rgba(59,130,246,.18)','rgba(34,197,94,.18)','rgba(168,85,247,.18)','rgba(245,158,11,.18)','rgba(239,68,68,.18)'];
+const AVT=['#93c5fd','#86efac','#d8b4fe','#fcd34d','#fca5a5'];
+const abg=c=>AVC[c%5],atc=c=>AVT[c%5];
+const ini=n=>n.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const fmtD=s=>{if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`;};
+const slbl=s=>({pendente:'Pendente',andamento:'Em Andamento',revisao:'Em Revisão',concluido:'Concluído'}[s]||s);
+const scol=s=>({pendente:'b-gray',andamento:'b-amber',revisao:'b-purple',concluido:'b-green'}[s]||'b-gray');
+const today=()=>{const d=new Date();d.setHours(0,0,0,0);return d;};
+const overdue=t=>t.status!=='concluido'&&new Date(t.due)<today();
+const isRoot=u=>u&&u.un===ROOT_UN;
+const nowDt=()=>new Date().toISOString().slice(0,10);
+
+let S={cfg:{},users:[],tasks:[],messages:[]};
+let S_cu=null,S_qf=null;
+let GH={token:'',owner:'',repo:'',branch:'main'};
+
+// ============ GITHUB PERSISTENCE ============
+function ghKey(){return 'sst_gh_'+location.hostname;}
+function saveGHLocal(){localStorage.setItem(ghKey(),JSON.stringify(GH));}
+function loadGHLocal(){try{const d=JSON.parse(localStorage.getItem(ghKey())||'{}');GH={token:d.token||'',owner:d.owner||'',repo:d.repo||'',branch:d.branch||'main'};}catch(e){}}
+
+async function loadFromGitHub(){
+  if(!GH.owner||!GH.repo){toast('Configure o GitHub primeiro (aba GitHub/Sync)','e');return;}
+  const url=`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/data.json?ref=${GH.branch}&t=${Date.now()}`;
+  try{
+    const r=await fetch(url,{headers:GH.token?{Authorization:`token ${GH.token}`}:{}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const txt=atob(j.content.replace(/\n/g,''));
+    const data=JSON.parse(txt);
+    applyData(data);
+    toast('Dados sincronizados do GitHub!','s');
+    return true;
+  }catch(e){
+    console.warn('GitHub load failed:',e.message);
+    return false;
+  }
+}
+
+async function publishToGitHub(){
+  if(!GH.token||!GH.owner||!GH.repo){toast('Configure e salve as credenciais do GitHub primeiro.','e');return;}
+  const st=document.getElementById('gh-status');
+  if(st)st.innerHTML='<span style="color:var(--amber)">⏳ Publicando...</span>';
+  showSaving(true);
+  const data=getDataSnapshot();
+  const content=btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2))));
+  const url=`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/data.json`;
+  try{
+    // Get current SHA
+    const gr=await fetch(url+'?ref='+GH.branch,{headers:{Authorization:`token ${GH.token}`,'Accept':'application/vnd.github.v3+json'}});
+    let sha='';
+    if(gr.ok){const gj=await gr.json();sha=gj.sha||'';}
+    const body={message:'SST: update data.json — '+new Date().toLocaleString('pt-BR'),content,branch:GH.branch};
+    if(sha)body.sha=sha;
+    const pr=await fetch(url,{method:'PUT',headers:{Authorization:`token ${GH.token}`,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify(body)});
+    if(!pr.ok){const err=await pr.json();throw new Error(err.message||'PUT failed');}
+    if(st)st.innerHTML='<span style="color:var(--green)">✅ Publicado com sucesso! Vercel redeploy iniciado.</span>';
+    toast('data.json publicado no GitHub!','s');
+  }catch(e){
+    if(st)st.innerHTML=`<span style="color:var(--red)">❌ Erro: ${e.message}</span>`;
+    toast('Erro ao publicar: '+e.message,'e');
+  }finally{showSaving(false);}
+}
+
+async function testGHConnection(){
+  const token=document.getElementById('gh-token').value.trim();
+  const owner=document.getElementById('gh-owner').value.trim();
+  const repo=document.getElementById('gh-repo').value.trim();
+  if(!token||!owner||!repo){toast('Preencha todos os campos','e');return;}
+  const st=document.getElementById('gh-status');
+  if(st)st.innerHTML='<span style="color:var(--amber)">⏳ Testando...</span>';
+  try{
+    const r=await fetch(`https://api.github.com/repos/${owner}/${repo}`,{headers:{Authorization:`token ${token}`}});
+    if(r.ok){if(st)st.innerHTML='<span style="color:var(--green)">✅ Conexão bem-sucedida!</span>';toast('Conexão OK!','s');}
+    else throw new Error('HTTP '+r.status);
+  }catch(e){if(st)st.innerHTML=`<span style="color:var(--red)">❌ Falhou: ${e.message}</span>`;toast('Falhou: '+e.message,'e');}
+}
+
+function saveGHConfig(){
+  GH.token=document.getElementById('gh-token').value.trim();
+  GH.owner=document.getElementById('gh-owner').value.trim();
+  GH.repo=document.getElementById('gh-repo').value.trim();
+  GH.branch=document.getElementById('gh-branch').value.trim()||'main';
+  saveGHLocal();
+  toast('Configuração do GitHub salva!','s');
+}
+
+function getDataSnapshot(){return {cfg:S.cfg,users:S.users,tasks:S.tasks,messages:S.messages};}
+
+function applyData(data){
+  if(data.cfg)S.cfg=data.cfg;
+  if(data.users)S.users=data.users;
+  if(data.tasks)S.tasks=data.tasks;
+  if(data.messages)S.messages=data.messages||[];
+  applySettings();
+  if(S_cu){
+    updateCounts();renderKanban();
+    if(document.getElementById('v-msgs').style.display!=='none')renderMsgs();
+  }
+}
+
+function showSaving(b){document.getElementById('saving-ind').style.display=b?'flex':'none';}
+
+// Auto-save to GitHub (debounced)
+let saveTimer=null;
+function scheduleAutoSave(){
+  if(!GH.token||!GH.owner||!GH.repo)return;
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>publishToGitHub(),3000);
+}
+
+// ============ INIT ============
+async function init(){
+  loadGHLocal();
+  // Try to load data.json from same origin (works on Vercel)
+  let loaded=false;
+  try{
+    const r=await fetch('./data.json?t='+Date.now());
+    if(r.ok){const data=await r.json();applyData(data);loaded=true;}
+  }catch(e){}
+  if(!loaded){
+    // Fallback: try GitHub
+    if(GH.owner&&GH.repo){await loadFromGitHub();}
+    else {
+      // Use inline defaults
+      applyData({
+        cfg:{siteTitle:'SST Manager',sub:'Gestão de Segurança do Trabalho',hdr:'SST Manager',company:'Empresa SST',ftr:'© 2024 Empresa SST — Sistema de Gestão de SST',ver:'v1.0.0',email:'admin@empresa.com',accent:'#3b82f6',units:['Unidade A','Unidade B','Unidade C']},
+        users:[{id:'u1',un:'admin',pw:'sesmtvmp',name:'Administrador',turno:'diurno',units:['Unidade A','Unidade B','Unidade C'],p:{changeSelf:true,changeAll:true,addObs:true,editTask:true,manageTask:true,deleteTask:true,isAdmin:true},active:true}],
+        tasks:[],messages:[]
+      });
+    }
+  }
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+}
+
+// ============ LOGIN ============
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('lu').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+  document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+  init();
+});
+
+function doLogin(){
+  const u=S.users.find(x=>x.un===document.getElementById('lu').value.trim()&&x.pw===document.getElementById('lp').value&&x.active);
+  if(!u){toast('Usuário ou senha inválidos','e');return;}
+  S_cu=u;
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  if(u.p.isAdmin||isRoot(u)){
+    document.getElementById('adm-nav').style.display='block';
+  }
+  if(u.p.manageTask||u.p.isAdmin||isRoot(u)){
+    document.getElementById('btn-nt').style.display='inline-flex';
+    document.getElementById('btn-ntl').style.display='inline-flex';
+  }
+  // Non-admin can send messages
+  if(!isRoot(u)&&!u.p.isAdmin){
+    document.getElementById('btn-new-msg').style.display='inline-flex';
+  }
+  document.getElementById('hname').textContent=u.name.split(' ')[0];
+  const i=S.users.indexOf(u);
+  document.getElementById('ha').textContent=ini(u.name);
+  document.getElementById('ha').style.background=abg(i);
+  document.getElementById('ha').style.color=atc(i);
+  applySettings();populateFilters();updateCounts();renderKanban();updateMsgBadge();
+  // If admin, populate GH config fields
+  if(isRoot(u)||u.p.isAdmin){
+    document.getElementById('gh-token').value=GH.token;
+    document.getElementById('gh-owner').value=GH.owner;
+    document.getElementById('gh-repo').value=GH.repo;
+    document.getElementById('gh-branch').value=GH.branch||'main';
+  }
+}
+
+function doLogout(){
+  S_cu=null;
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('adm-nav').style.display='none';
+  document.getElementById('btn-nt').style.display='none';
+  document.getElementById('btn-ntl').style.display='none';
+  document.getElementById('btn-new-msg').style.display='none';
+  closeModal();
+  document.getElementById('lu').value='';document.getElementById('lp').value='';
+}
+
+function showUserMenu(){
+  const u=S_cu,i=S.users.indexOf(u);
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">Minha conta</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div class="avatar" style="width:44px;height:44px;font-size:16px;background:${abg(i)};color:${atc(i)}">${ini(u.name)}</div>
+      <div>
+        <div style="font-size:14px;font-weight:600">${u.name}</div>
+        <div style="font-size:12px;color:var(--text3)">@${u.un} · ${isRoot(u)?'👑 Admin Geral':u.p.isAdmin?'Administrador':'Técnico'}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${u.units.join(', ')} · ${u.turno==='noturno'?'🌙 Noturno':'🌞 Diurno'}</div>
+      </div>
+    </div>
+    <div class="sep"></div>
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">🔒 Alterar minha senha</div>
+    <div class="fg"><label class="flbl">Senha atual</label><input class="finput" type="password" id="pw-old" placeholder="••••••••"></div>
+    <div class="fg"><label class="flbl">Nova senha</label><input class="finput" type="password" id="pw-new" placeholder="mínimo 6 caracteres"></div>
+    <div class="fg"><label class="flbl">Confirmar nova senha</label><input class="finput" type="password" id="pw-cfm" placeholder="repita a nova senha"></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-bottom:10px" onclick="changePassword()">🔒 Salvar nova senha</button>
+    <div class="sep"></div>
+    <button class="btn btn-d" onclick="doLogout()" style="width:100%;justify-content:center">Sair</button>
+  </div>`);
+}
+
+function changePassword(){
+  const u=S_cu;
+  const oldPw=document.getElementById('pw-old').value;
+  const newPw=document.getElementById('pw-new').value;
+  const cfmPw=document.getElementById('pw-cfm').value;
+  if(!oldPw||!newPw||!cfmPw){toast('Preencha todos os campos','e');return;}
+  if(oldPw!==u.pw){toast('Senha atual incorreta','e');document.getElementById('pw-old').value='';return;}
+  if(newPw.length<6){toast('A nova senha deve ter pelo menos 6 caracteres','e');return;}
+  if(newPw!==cfmPw){toast('As senhas não conferem','e');document.getElementById('pw-cfm').value='';return;}
+  u.pw=newPw;
+  closeModal();
+  toast('Senha alterada com sucesso!','s');
+  scheduleAutoSave();
+}
+
+// ============ VIEWS ============
+function setView(v){
+  ['kanban','list','msgs','users','cfg','github'].forEach(x=>{
+    document.getElementById('v-'+x).style.display=x===v?'block':'none';
+    const n=document.getElementById('n-'+x);
+    if(n)n.classList.toggle('active',x===v);
+  });
+  if(v==='kanban')renderKanban();
+  if(v==='list')renderList();
+  if(v==='msgs')renderMsgs();
+  if(v==='users')renderUsers();
+  if(v==='cfg')renderCfg();
+}
+
+// ============ VISIBILITY ============
+function canSeeTask(t,cu){
+  if(!cu)return false;
+  if(isRoot(cu))return true;
+  const adminUser=S.users.find(x=>x.un===ROOT_UN);
+  if(adminUser&&t.uid===adminUser.id)return false;
+  if(cu.p.isAdmin||cu.p.changeAll)return true;
+  if(t.uid===cu.id)return true;
+  if(t.turno==='conjunto'&&cu.units.includes(t.unit))return true;
+  return false;
+}
+
+// ============ FILTERS ============
+function populateFilters(){
+  const uf=document.getElementById('fi-unit');
+  uf.innerHTML='<option value="">Todas unidades</option>';
+  S.cfg.units.forEach(u=>uf.innerHTML+=`<option>${u}</option>`);
+}
+
+function getFT(){
+  const q=(document.getElementById('fi-q')?.value||'').toLowerCase();
+  const fu=document.getElementById('fi-unit')?.value||'';
+  const ft=document.getElementById('fi-turno')?.value||'';
+  const fp=document.getElementById('fi-per')?.value||'';
+  const tod=today();
+  return S.tasks.filter(t=>{
+    if(!canSeeTask(t,S_cu))return false;
+    if(S_qf==='atrasado'&&!overdue(t))return false;
+    if(S_qf==='andamento'&&t.status!=='andamento')return false;
+    if(S_qf==='concluido'&&t.status!=='concluido')return false;
+    if(q&&!t.title.toLowerCase().includes(q)&&!t.desc.toLowerCase().includes(q))return false;
+    if(fu&&t.unit!==fu)return false;
+    if(ft&&t.turno!=='conjunto'&&t.turno!==ft)return false;
+    if(fp==='hoje'){const d=new Date(t.due);d.setHours(0,0,0,0);if(d.getTime()!==tod.getTime())return false;}
+    if(fp==='semana'){const d=new Date(t.due);d.setHours(0,0,0,0);const we=new Date(tod);we.setDate(tod.getDate()+7);if(d<tod||d>we)return false;}
+    if(fp==='mes'){const d=new Date(t.due);if(d.getMonth()!==tod.getMonth()||d.getFullYear()!==tod.getFullYear())return false;}
+    if(fp==='atrasado'&&!overdue(t))return false;
+    return true;
+  });
+}
+
+function updateCounts(){
+  const vis=S.tasks.filter(t=>canSeeTask(t,S_cu));
+  document.getElementById('sc-k').textContent=vis.filter(t=>t.status!=='concluido').length;
+  document.getElementById('sc-at').textContent=vis.filter(overdue).length;
+  document.getElementById('sc-and').textContent=vis.filter(t=>t.status==='andamento').length;
+  document.getElementById('sc-ok').textContent=vis.filter(t=>t.status==='concluido').length;
+  document.getElementById('sb-tot').textContent=vis.length;
+  document.getElementById('sb-ok').textContent=vis.filter(t=>t.status==='concluido').length;
+  updateMsgBadge();
+}
+
+function setQF(f){S_qf=f;renderKanban();updateCounts();}
+
+// ============ KANBAN ============
+let dragId=null;
+function renderKanban(){
+  const b=document.getElementById('kboard');b.innerHTML='';
+  const ft=getFT();
+  COLS.forEach(col=>{
+    const items=ft.filter(t=>t.status===col.k);
+    const d=document.createElement('div');d.className='kb-col';d.dataset.col=col.k;
+    d.innerHTML=`<div class="kb-hdr"><div class="col-dot" style="background:${col.c}"></div><span class="col-ttl">${col.l}</span><span class="col-n">${items.length}</span></div>
+    <div class="kb-body" id="kb-${col.k}" ondragover="event.preventDefault()" ondrop="onDrop(event,'${col.k}')"></div>
+    ${(S_cu.p.manageTask||S_cu.p.isAdmin||isRoot(S_cu))?`<button class="add-btn" onclick="openTaskModal('${col.k}')">+ Adicionar tarefa</button>`:''}`;
+    b.appendChild(d);
+    items.forEach(t=>appendCard(t,col.k));
+  });
+  updateCounts();
+}
+
+function appendCard(t,colK){
+  const body=document.getElementById('kb-'+colK);if(!body)return;
+  const u=S.users.find(x=>x.id===t.uid)||{name:'—'};
+  const ui=S.users.findIndex(x=>x.id===t.uid);
+  const ov=overdue(t);
+  const cu=S_cu;
+  const isAdminUser=isRoot(cu)||cu.p.isAdmin;
+  // [MOD 02] Somente admin pode editar tarefas
+  const canE=isAdminUser;
+  const canD=isAdminUser||cu.p.deleteTask;
+  const canRep=isAdminUser||cu.p.manageTask;
+  const s=new Date(t.start),e=new Date(t.due),n=new Date();
+  const pct=t.status==='concluido'?100:Math.min(100,Math.max(0,Math.round((n-s)/(e-s)*100)));
+  const isJ=t.turno==='conjunto';
+  const div=document.createElement('div');
+  div.className='tc'+(isJ?' joint':'');
+  div.draggable=true;div.dataset.id=t.id;
+  div.ondragstart=()=>dragId=t.id;
+  div.onclick=ev=>{if(!ev.target.closest('.ib'))openDetail(t.id);};
+  div.innerHTML=`<div class="pbar p${t.prio[0]}"></div>
+    <div class="tc-title">${t.title}</div>
+    ${t.desc?`<div class="tc-desc">${t.desc}</div>`:''}
+    <div class="tc-meta">
+      <span class="badge ${ov?'b-red':'b-gray'}">${ov?'⚠ Atrasada':'📅 '+fmtD(t.due)}</span>
+      <span class="badge ${t.prio==='alta'?'b-red':t.prio==='media'?'b-amber':'b-green'}">${t.prio}</span>
+      <span class="badge b-gray">${t.unit}</span>
+      ${isJ?'<span class="badge b-purple">🤝 Conjunta</span>':''}
+    </div>
+    <div class="tc-foot">
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)">
+        <div class="avatar" style="background:${abg(ui)};color:${atc(ui)}">${ini(u.name)}</div>${u.name.split(' ')[0]}
+        <span class="badge b-gray">${isJ?'🌞🌙':t.turno==='noturno'?'🌙':'🌞'}</span>
+      </div>
+      ${t.obs.length?`<span style="font-size:11px;color:var(--text3)">💬 ${t.obs.length}</span>`:''}
+    </div>
+    ${t.status!=='pendente'?`<div class="prog"><div class="prog-f" style="width:${pct}%;background:${t.status==='concluido'?'var(--green)':ov?'var(--red)':'var(--accent)'}"></div></div>`:''}
+    <div class="tc-acts">
+      ${canE?`<button class="ib" onclick="event.stopPropagation();openTaskModal(null,'${t.id}')" title="Editar">✏️</button>`:''}
+      ${canRep?`<button class="ib" onclick="event.stopPropagation();repTask('${t.id}')" title="Replicar">📋</button>`:''}
+      ${canD?`<button class="ib del" onclick="event.stopPropagation();delTask('${t.id}')" title="Excluir">🗑</button>`:''}
+    </div>`;
+  body.appendChild(div);
+}
+
+function onDrop(e,col){
+  e.preventDefault();if(!dragId)return;
+  const t=S.tasks.find(x=>x.id===dragId);if(!t)return;
+  const cu=S_cu;
+  const isJ=t.turno==='conjunto';
+  const canChg=isRoot(cu)||cu.p.isAdmin||cu.p.changeAll||(cu.p.changeSelf&&t.uid===cu.id)||(isJ&&cu.units.includes(t.unit)&&cu.p.changeSelf);
+  if(!canChg){toast('Sem permissão para alterar este status','e');return;}
+  if(t.status===col)return;
+  const old=slbl(t.status),nlbl=slbl(col);
+  t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:`Status: "${old}" → "${nlbl}".`,t:'s'});
+  t.status=col;
+  simEmail(t,cu,`Status: "${old}" → "${nlbl}"`);
+  dragId=null;renderKanban();toast(`Status alterado para "${nlbl}"`, 's');
+  scheduleAutoSave();
+}
+
+// ============ LIST ============
+function renderList(){
+  const b=document.getElementById('lt-body');b.innerHTML='';
+  const ft=getFT();
+  if(!ft.length){b.innerHTML='<tr><td colspan="8" class="empty">Nenhuma tarefa encontrada.</td></tr>';return;}
+  const cu=S_cu;
+  const isAdminUser=isRoot(cu)||cu.p.isAdmin;
+  ft.forEach(t=>{
+    const u=S.users.find(x=>x.id===t.uid)||{name:'—'};
+    const ov=overdue(t);const isJ=t.turno==='conjunto';
+    b.innerHTML+=`<tr>
+      <td style="font-weight:500;max-width:200px">${t.title}${isJ?' <span class="badge b-purple">🤝</span>':''}</td>
+      <td>${u.name}</td><td>${t.unit}</td>
+      <td>${isJ?'🌞🌙 Ambos':t.turno==='noturno'?'🌙 Noturno':'🌞 Diurno'}</td>
+      <td style="color:${ov?'var(--red)':'inherit'}">${fmtD(t.due)}</td>
+      <td><span class="badge ${scol(t.status)}">${slbl(t.status)}</span></td>
+      <td><span class="badge ${t.prio==='alta'?'b-red':t.prio==='media'?'b-amber':'b-green'}">${t.prio}</span></td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn btn-sm" onclick="openDetail('${t.id}')">Ver</button>
+        ${isAdminUser?`<button class="btn btn-sm" onclick="openTaskModal(null,'${t.id}')">✏️</button>`:''}
+        ${isAdminUser?`<button class="btn btn-sm btn-d" onclick="delTask('${t.id}')">🗑</button>`:''}
+      </div></td>
+    </tr>`;
+  });
+}
+
+// ============ TASK MODAL (ADMIN ONLY - MOD 02) ============
+function openTaskModal(defCol,eid){
+  const cu=S_cu;
+  // [MOD 02] Somente admin abre este modal de edição completa
+  if(!isRoot(cu)&&!cu.p.isAdmin){toast('Apenas administradores podem criar/editar tarefas.','e');return;}
+  const t=eid?S.tasks.find(x=>x.id===eid):null;
+  const uopts=S.users.filter(u=>u.active&&!isRoot({un:u.un})).map(u=>`<option value="${u.id}" ${t?.uid===u.id?'selected':''}>${u.name} (${u.turno})</option>`).join('');
+  const unopts=S.cfg.units.map(u=>`<option ${t?.unit===u?'selected':''}>${u}</option>`).join('');
+  const copts=COLS.map(c=>`<option value="${c.k}" ${(t?.status||defCol||'pendente')===c.k?'selected':''}>${c.l}</option>`).join('');
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">${t?'Editar Tarefa':'Nova Tarefa'}</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="fg"><label class="flbl">Título *</label><input class="finput" id="tm-t" value="${t?.title||''}" placeholder="Descrição da tarefa"></div>
+    <div class="fg"><label class="flbl">Descrição</label><textarea class="fta" id="tm-d">${t?.desc||''}</textarea></div>
+    <div class="fgrid">
+      <div class="fg"><label class="flbl">Responsável principal</label><select class="fsel" id="tm-u">${uopts}</select></div>
+      <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="tm-un">${unopts}</select></div>
+      <div class="fg"><label class="flbl">Turno / Responsabilidade</label>
+        <select class="fsel" id="tm-tr">
+          <option value="diurno" ${t?.turno==='diurno'||!t?'selected':''}>🌞 Diurno</option>
+          <option value="noturno" ${t?.turno==='noturno'?'selected':''}>🌙 Noturno</option>
+          <option value="conjunto" ${t?.turno==='conjunto'?'selected':''}>🌞🌙 Conjunta (Diurno + Noturno)</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flbl">Status</label><select class="fsel" id="tm-s">${copts}</select></div>
+      <div class="fg"><label class="flbl">Prioridade</label>
+        <select class="fsel" id="tm-p">
+          <option value="alta" ${t?.prio==='alta'?'selected':''}>🔴 Alta</option>
+          <option value="media" ${t?.prio==='media'||!t?'selected':''}>🟡 Média</option>
+          <option value="baixa" ${t?.prio==='baixa'?'selected':''}>🟢 Baixa</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flbl">Período</label>
+        <select class="fsel" id="tm-per">
+          <option value="unico" ${!t||t?.period==='unico'?'selected':''}>Único</option>
+          <option value="semanal" ${t?.period==='semanal'?'selected':''}>Semanal</option>
+          <option value="mensal" ${t?.period==='mensal'?'selected':''}>Mensal</option>
+          <option value="anual" ${t?.period==='anual'?'selected':''}>Anual</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flbl">Data de início</label><input class="finput" type="date" id="tm-st" value="${t?.start||new Date().toISOString().slice(0,10)}"></div>
+      <div class="fg"><label class="flbl">Prazo</label><input class="finput" type="date" id="tm-du" value="${t?.due||''}"></div>
+    </div>
+    <div class="fg"><label class="flbl">Observação inicial</label><textarea class="fta" id="tm-ob" placeholder="Opcional..." style="min-height:56px"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTask('${eid||''}')">💾 Salvar</button></div>`,true);
+}
+
+function saveTask(eid){
+  const ttl=document.getElementById('tm-t').value.trim();
+  if(!ttl){toast('Informe o título','e');return;}
+  const obs=document.getElementById('tm-ob').value.trim();
+  const cu=S_cu;
+  if(eid){
+    const t=S.tasks.find(x=>x.id===eid);
+    const os=t.status;
+    t.title=ttl;t.desc=document.getElementById('tm-d').value;
+    t.uid=document.getElementById('tm-u').value;t.unit=document.getElementById('tm-un').value;
+    t.turno=document.getElementById('tm-tr').value;t.status=document.getElementById('tm-s').value;
+    t.prio=document.getElementById('tm-p').value;t.start=document.getElementById('tm-st').value;
+    t.due=document.getElementById('tm-du').value;t.period=document.getElementById('tm-per').value;
+    if(os!==t.status){t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:`Status: "${slbl(os)}" → "${slbl(t.status)}".`,t:'s'});simEmail(t,cu,`Status: "${slbl(os)}" → "${slbl(t.status)}"`);}
+    if(obs)t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:obs,t:'u'});
+    toast('Tarefa atualizada!','s');
+  }else{
+    const nt={id:'t'+Date.now(),title:ttl,desc:document.getElementById('tm-d').value,uid:document.getElementById('tm-u').value,unit:document.getElementById('tm-un').value,turno:document.getElementById('tm-tr').value,status:document.getElementById('tm-s').value,prio:document.getElementById('tm-p').value,start:document.getElementById('tm-st').value,due:document.getElementById('tm-du').value,period:document.getElementById('tm-per').value,by:cu.id,obs:[{by:cu.id,name:cu.name,dt:nowDt(),txt:'Tarefa criada.',t:'s'}]};
+    if(obs)nt.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:obs,t:'u'});
+    S.tasks.push(nt);
+    toast('Tarefa criada!','s');
+  }
+  closeModal();renderKanban();updateCounts();scheduleAutoSave();
+}
+
+function repTask(id){
+  const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  const cu=S_cu;
+  if(!isRoot(cu)&&!cu.p.isAdmin){doRepSimple(t);return;}
+  const unitOpts=S.cfg.units.map(u=>`<option value="${u}" ${u===t.unit?'selected':''}>${u}${u===t.unit?' (origem)':''}</option>`).join('');
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">📋 Replicar tarefa</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <p style="color:var(--text2);margin-bottom:14px;font-size:13px">Replicando: <strong>"${t.title}"</strong></p>
+    <div class="fg"><label class="flbl">Unidade destino</label><select class="fsel" id="rep-unit">${unitOpts}</select></div>
+    <div class="fg"><label class="flbl">Turno destino</label>
+      <select class="fsel" id="rep-turno">
+        <option value="diurno" ${t.turno==='diurno'?'selected':''}>🌞 Diurno</option>
+        <option value="noturno" ${t.turno==='noturno'?'selected':''}>🌙 Noturno</option>
+        <option value="conjunto" ${t.turno==='conjunto'?'selected':''}>🌞🌙 Conjunta</option>
+      </select>
+    </div>
+    <div class="fg"><label class="flbl">Responsável</label>
+      <select class="fsel" id="rep-user">
+        ${S.users.filter(u=>u.active&&!isRoot({un:u.un})).map(u=>`<option value="${u.id}">${u.name} (${u.turno}) — ${u.units.join(', ')}</option>`).join('')}
+      </select>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="doRepModal('${id}')">📋 Replicar</button></div>`);
+}
+
+function doRepModal(id){
+  const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  const unit=document.getElementById('rep-unit').value;
+  const turno=document.getElementById('rep-turno').value;
+  const uid=document.getElementById('rep-user').value;
+  const cu=S_cu;
+  S.tasks.push({...t,id:'t'+Date.now(),title:'[Cópia] '+t.title,status:'pendente',unit,turno,uid,obs:[{by:cu.id,name:cu.name,dt:nowDt(),txt:`Replicada de "${t.title}" (${t.unit}) → ${unit}.`,t:'s'}]});
+  closeModal();renderKanban();updateCounts();toast(`Replicada para ${unit}!`,'s');scheduleAutoSave();
+}
+
+function doRepSimple(t){
+  const cu=S_cu;
+  S.tasks.push({...t,id:'t'+Date.now(),title:'[Cópia] '+t.title,status:'pendente',obs:[{by:cu.id,name:cu.name,dt:nowDt(),txt:'Replicada.',t:'s'}]});
+  renderKanban();updateCounts();toast('Tarefa replicada!','s');scheduleAutoSave();
+}
+
+function delTask(id){
+  const t=S.tasks.find(x=>x.id===id);
+  showModal(`<div class="modal-hdr"><div class="modal-ttl" style="color:var(--red)">⚠️ Excluir tarefa</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body"><p style="color:var(--text2)">Excluir "<strong>${t?.title}</strong>"? Esta ação é permanente.</p></div>
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-d" onclick="_delTask('${id}')">🗑 Excluir</button></div>`);
+}
+function _delTask(id){S.tasks=S.tasks.filter(x=>x.id!==id);closeModal();renderKanban();updateCounts();toast('Tarefa excluída.','i');scheduleAutoSave();}
+
+// ============ DETAIL ============
+function openDetail(id){
+  const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  if(!canSeeTask(t,S_cu)){toast('Sem acesso a esta tarefa','e');return;}
+  const u=S.users.find(x=>x.id===t.uid)||{name:'—'};
+  const cu=S_cu;const isJ=t.turno==='conjunto';
+  const canSt=isRoot(cu)||cu.p.isAdmin||cu.p.changeAll||(cu.p.changeSelf&&t.uid===cu.id)||(isJ&&cu.units.includes(t.unit)&&cu.p.changeSelf);
+  const canObs=cu.p.addObs||cu.p.isAdmin||isRoot(cu);
+  const ov=overdue(t);
+  const copts=COLS.map(c=>`<option value="${c.k}" ${t.status===c.k?'selected':''}>${c.l}</option>`).join('');
+  const obsHTML=t.obs.map(o=>`<div class="obs-item ${o.t==='s'?'obs-sys':'obs-usr'}">
+    <div class="obs-meta"><span>👤 ${o.name}</span><span>${o.dt}</span><span>${o.t==='s'?'sistema':'observação'}</span></div>
+    <div class="obs-txt">${o.txt}</div>
+  </div>`).join('');
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">${t.title}</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="badge ${t.prio==='alta'?'b-red':t.prio==='media'?'b-amber':'b-green'}">Prioridade: ${t.prio}</span>
+      <span class="badge b-gray">${t.unit}</span>
+      <span class="badge b-gray">${isJ?'🌞🌙 Conjunta':t.turno==='noturno'?'🌙 Noturno':'🌞 Diurno'}</span>
+      ${ov?'<span class="badge b-red">⚠ Atrasada</span>':''}
+      <span class="badge b-gray">📅 ${fmtD(t.due)}</span>
+    </div>
+    ${t.desc?`<p style="color:var(--text2);font-size:13px;margin-bottom:10px;line-height:1.6">${t.desc}</p>`:''}
+    <div class="fgrid" style="margin-bottom:12px">
+      <div><div style="font-size:10px;color:var(--text3)">Responsável</div><div style="font-size:13px;font-weight:500;margin-top:2px">${u.name}</div></div>
+      <div><div style="font-size:10px;color:var(--text3)">Período</div><div style="font-size:13px;margin-top:2px">${t.period||'Único'}</div></div>
+    </div>
+    ${canSt?`<div class="fg"><label class="flbl">Alterar status</label><div style="display:flex;gap:7px">
+      <select class="fsel" id="ds" style="flex:1">${copts}</select>
+      <button class="btn btn-p" onclick="chgSt('${id}')">Atualizar</button>
+    </div></div>`:`<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Status: <strong>${slbl(t.status)}</strong></div>`}
+    <div class="sep"></div>
+    <div style="font-size:12px;font-weight:600;margin-bottom:8px">💬 Histórico & Observações</div>
+    <div class="obs-log">${obsHTML||'<div style="color:var(--text3);font-size:12px;text-align:center;padding:1rem">Sem observações.</div>'}</div>
+    ${canObs?`<div class="fg" style="margin-top:12px"><label class="flbl">Nova observação</label>
+      <textarea class="fta" id="dobs" style="min-height:60px" placeholder="Escreva uma observação..."></textarea>
+      <button class="btn btn-p" style="margin-top:7px" onclick="addObs('${id}')">💬 Adicionar</button>
+    </div>`:''}
+  </div>`,true);
+}
+
+function chgSt(id){
+  const t=S.tasks.find(x=>x.id===id);const ns=document.getElementById('ds').value;
+  if(t.status===ns)return;
+  const ol=slbl(t.status),nl=slbl(ns);const cu=S_cu;
+  t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:`Status: "${ol}" → "${nl}".`,t:'s'});
+  t.status=ns;simEmail(t,cu,`Status: "${ol}" → "${nl}"`);
+  closeModal();renderKanban();updateCounts();toast(`Status → "${nl}"`, 's');scheduleAutoSave();
+}
+
+function addObs(id){
+  const t=S.tasks.find(x=>x.id===id);
+  const txt=document.getElementById('dobs').value.trim();
+  if(!txt){toast('Escreva uma observação','e');return;}
+  const cu=S_cu;
+  t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt,t:'u'});
+  simEmail(t,cu,`Nova observação: "${txt.slice(0,60)}${txt.length>60?'...':''}"`);
+  closeModal();openDetail(id);toast('Observação adicionada!','s');scheduleAutoSave();
+}
+
+// ============ MESSAGES (MOD 03) ============
+function updateMsgBadge(){
+  if(!S_cu)return;
+  const cu=S_cu;
+  let count=0;
+  if(isRoot(cu)||cu.p.isAdmin){
+    // Admin vê mensagens não lidas de qualquer usuário
+    count=S.messages.filter(m=>!m.readByAdmin).length;
+  } else {
+    // Usuário vê respostas não lidas para suas mensagens
+    count=S.messages.filter(m=>m.fromId===cu.id&&m.reply&&!m.readByUser).length;
+  }
+  const el=document.getElementById('sc-msgs');
+  el.textContent=count>0?count:S.messages.filter(m=>isRoot(cu)||cu.p.isAdmin?true:m.fromId===cu.id).length;
+  el.className='sc'+(count>0?' new':'');
+}
+
+function renderMsgs(){
+  const cu=S_cu;
+  const isAdminUser=isRoot(cu)||cu.p.isAdmin;
+  const el=document.getElementById('msgs-title');
+  el.textContent=isAdminUser?'Caixa de mensagens':'Minhas mensagens';
+  document.getElementById('btn-new-msg').style.display=!isAdminUser?'inline-flex':'none';
+  const list=document.getElementById('msgs-list');
+  const mine=isAdminUser?S.messages:S.messages.filter(m=>m.fromId===cu.id);
+  if(!mine.length){list.innerHTML='<div class="empty">Nenhuma mensagem ainda.</div>';return;}
+  // Mark as read
+  if(isAdminUser) mine.forEach(m=>{if(!m.readByAdmin)m.readByAdmin=true;});
+  else mine.forEach(m=>{if(m.reply&&!m.readByUser)m.readByUser=true;});
+  list.innerHTML='';
+  [...mine].reverse().forEach(m=>{
+    const isUnread=isAdminUser?!m.readByAdmin:m.reply&&!m.readByUser;
+    const d=document.createElement('div');
+    d.className='msg-card'+(isUnread?' unread':m.reply?' replied':'');
+    const typeColor={Solicitação:'b-blue',Sugestão:'b-green',Crítica:'b-red',Dúvida:'b-amber',Outro:'b-gray'}[m.type]||'b-gray';
+    d.innerHTML=`<div class="msg-hdr">
+      <div>
+        <div class="msg-from">${isAdminUser?m.fromName:''} <span class="badge ${typeColor}" style="margin-left:${isAdminUser?6:0}px">${m.type}</span></div>
+        ${!isAdminUser&&m.subject?`<div style="font-size:12px;color:var(--text2);margin-top:2px">${m.subject}</div>`:''}
+        ${isAdminUser?`<div style="font-size:12px;color:var(--text2);margin-top:2px">${m.subject}</div>`:''}
+      </div>
+      <div style="text-align:right">
+        <div class="msg-date">${m.dt}</div>
+        ${isUnread?'<span class="badge b-purple" style="margin-top:3px">Nova</span>':''}
+      </div>
+    </div>
+    <div class="msg-body">${m.body}</div>
+    ${m.reply?`<div class="msg-reply"><div class="msg-reply-lbl">✅ Resposta do administrador</div><div class="msg-reply-txt">${m.reply}</div></div>`:''}
+    ${isAdminUser?`<div style="display:flex;gap:6px;margin-top:10px">
+      <button class="btn btn-sm btn-p" onclick="openReplyModal('${m.id}')">↩️ Responder</button>
+      <button class="btn btn-sm btn-d" onclick="deleteMsg('${m.id}')">🗑 Excluir</button>
+    </div>`:''}`;
+    list.appendChild(d);
+  });
+  updateMsgBadge();
+  scheduleAutoSave();
+}
+
+function openNewMsgModal(){
+  const typeOpts=MSG_TYPES.map(t=>`<option>${t}</option>`).join('');
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">✉️ Nova mensagem ao administrador</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="fg"><label class="flbl">Assunto *</label><input class="finput" id="msg-subj" placeholder="Assunto da mensagem"></div>
+    <div class="fg"><label class="flbl">Tipo</label><select class="fsel" id="msg-type">${typeOpts}</select></div>
+    <div class="fg"><label class="flbl">Mensagem *</label><textarea class="fta" id="msg-body" placeholder="Escreva sua mensagem aqui..." style="min-height:100px"></textarea></div>
+    <div class="info-box" style="margin-top:8px">Sua mensagem será enviada ao administrador. Você receberá uma resposta nesta seção.</div>
+  </div>
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="sendMsg()">✉️ Enviar</button></div>`);
+}
+
+function sendMsg(){
+  const subj=document.getElementById('msg-subj').value.trim();
+  const body=document.getElementById('msg-body').value.trim();
+  if(!subj||!body){toast('Preencha assunto e mensagem','e');return;}
+  const cu=S_cu;
+  const msg={id:'m'+Date.now(),fromId:cu.id,fromName:cu.name,fromUn:cu.un,subject:subj,type:document.getElementById('msg-type').value,body,dt:nowDt(),reply:null,readByAdmin:false,readByUser:false};
+  S.messages.push(msg);
+  closeModal();
+  simEmailMsg(msg);
+  toast('Mensagem enviada!','s');
+  setView('msgs');
+  scheduleAutoSave();
+}
+
+function openReplyModal(mid){
+  const m=S.messages.find(x=>x.id===mid);if(!m)return;
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">↩️ Responder — ${m.fromName}</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div style="background:var(--bg3);border-radius:var(--r);padding:10px;margin-bottom:14px">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${m.type} · ${m.dt}</div>
+      <div style="font-size:13px;font-weight:500;margin-bottom:4px">${m.subject}</div>
+      <div style="font-size:12px;color:var(--text2)">${m.body}</div>
+    </div>
+    <div class="fg"><label class="flbl">Sua resposta *</label><textarea class="fta" id="rep-body" placeholder="Escreva a resposta..." style="min-height:100px">${m.reply||''}</textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveReply('${mid}')">✅ Enviar resposta</button></div>`);
+}
+
+function saveReply(mid){
+  const m=S.messages.find(x=>x.id===mid);
+  const txt=document.getElementById('rep-body').value.trim();
+  if(!txt){toast('Escreva uma resposta','e');return;}
+  m.reply=txt;m.readByUser=false;
+  closeModal();renderMsgs();toast('Resposta enviada!','s');scheduleAutoSave();
+}
+
+function deleteMsg(mid){
+  S.messages=S.messages.filter(x=>x.id!==mid);
+  renderMsgs();toast('Mensagem excluída.','i');scheduleAutoSave();
+}
+
+function simEmailMsg(m){
+  console.log(`📧 [EMAIL SIMULADO]\nPara: ${S.cfg.email}\nAssunto: [SST] Nova mensagem de ${m.fromName} — ${m.subject}\nTipo: ${m.type}\n\n${m.body}`);
+}
+
+// ============ EMAIL SIM ============
+function simEmail(task,byU,action){
+  console.log(`📧 [EMAIL]\nPara: ${S.cfg.email}\nAssunto: [SST] "${task.title}"\nAção: ${action}\nPor: ${byU.name}\n`);
+}
+
+// ============ USERS ============
+function renderUsers(){
+  const g=document.getElementById('ugrid');g.innerHTML='';
+  const cu=S_cu;
+  S.users.forEach(u=>{
+    const i=S.users.indexOf(u);
+    const pks=Object.entries(u.p).filter(([k,v])=>v).map(([k])=>k);
+    const isRootU=isRoot(u);
+    const canEditThis=isRoot(cu)||(cu.p.isAdmin&&!isRootU);
+    const canToggle=!isRootU&&u.id!==cu.id&&(isRoot(cu)||cu.p.isAdmin);
+    const d=document.createElement('div');d.className='ucard';
+    d.innerHTML=`<div class="avatar" style="width:40px;height:40px;font-size:14px;flex-shrink:0;background:${abg(i)};color:${atc(i)}">${ini(u.name)}</div>
+    <div style="flex:1">
+      <div class="uc-name">${u.name} ${!u.active?'<span class="badge b-red">inativo</span>':''} ${isRootU?'<span class="locked-badge">👑 Admin Geral</span>':''}</div>
+      <div class="uc-meta"><span>@${u.un}</span><span>${u.turno==='noturno'?'🌙':'🌞'} ${u.turno}</span><span>${u.units.join(', ')}</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px">${pks.map(k=>`<span class="ptag ${isRootU?'root':k==='isAdmin'?'adm':''}">${PL[k]||k}</span>`).join('')}</div>
+      <div style="display:flex;gap:5px">
+        ${canEditThis?`<button class="btn btn-sm" onclick="openUserModal('${u.id}')">✏️ Editar</button>`:''}
+        ${canToggle?`<button class="btn btn-sm btn-d" onclick="toggleUA('${u.id}')">${u.active?'🔒 Desativar':'✅ Ativar'}</button>`:''}
+        ${!canEditThis&&!canToggle&&u.id!==cu.id?'<span style="font-size:11px;color:var(--text3)">—</span>':''}
+      </div>
+    </div>`;
+    g.appendChild(d);
+  });
+}
+
+function openUserModal(eid){
+  const cu=S_cu;
+  const u=eid?S.users.find(x=>x.id===eid):null;
+  if(u&&isRoot(u)&&!isRoot(cu)){toast('Permissões do admin geral são imutáveis.','e');return;}
+  if(u&&u.id!==cu.id&&!cu.p.isAdmin&&!isRoot(cu)){toast('Sem permissão para editar este usuário.','e');return;}
+  const uc=S.cfg.units.map(un=>`<label class="cb-item"><input type="checkbox" value="${un}" ${u?.units?.includes(un)||!u?'checked':''}>${un}</label>`).join('');
+  const isEditingRoot=u&&isRoot(u);const canEditPerms=isRoot(cu);
+  const pc=Object.entries(PL).map(([k,l])=>`<label class="cb-item" ${(!canEditPerms||isEditingRoot)?'style="opacity:.45;pointer-events:none"':''}>
+    <input type="checkbox" id="p-${k}" ${u?.p?.[k]?'checked':''}>${l}</label>`).join('');
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">${u?'Editar Usuário':'Novo Usuário'}</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="fgrid">
+      <div class="fg"><label class="flbl">Nome completo *</label><input class="finput" id="un-nm" value="${u?.name||''}"></div>
+      <div class="fg"><label class="flbl">Usuário *</label><input class="finput" id="un-us" value="${u?.un||''}" ${isEditingRoot?'readonly style="opacity:.6"':''}></div>
+      <div class="fg"><label class="flbl">Senha${u?' (em branco = manter)':' *'}</label><input class="finput" type="password" id="un-pw" placeholder="••••••••"></div>
+      <div class="fg"><label class="flbl">Turno</label><select class="fsel" id="un-tr"><option value="diurno" ${u?.turno!=='noturno'?'selected':''}>🌞 Diurno</option><option value="noturno" ${u?.turno==='noturno'?'selected':''}>🌙 Noturno</option></select></div>
+    </div>
+    <div class="fg"><label class="flbl">Unidades</label><div class="cb-g" style="flex-direction:row;flex-wrap:wrap;gap:8px" id="un-units">${uc}</div></div>
+    <div class="fg" style="margin-top:8px">
+      <label class="flbl">Permissões ${!canEditPerms?'<span style="color:var(--amber)">(somente admin geral pode alterar)</span>':''}</label>
+      <div class="pg">${pc}</div>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveUser('${eid||''}')">💾 Salvar</button></div>`,true);
+}
+
+function saveUser(eid){
+  const cu=S_cu;
+  const name=document.getElementById('un-nm').value.trim();
+  const un=document.getElementById('un-us').value.trim();
+  const pw=document.getElementById('un-pw').value;
+  if(!name||!un){toast('Nome e usuário obrigatórios','e');return;}
+  if(!eid&&!pw){toast('Defina uma senha','e');return;}
+  const units=[...document.querySelectorAll('#un-units input:checked')].map(c=>c.value);
+  const canEditPerms=isRoot(cu);
+  if(eid){
+    const u=S.users.find(x=>x.id===eid);
+    if(isRoot(u)&&!isRoot(cu)){toast('Não é possível editar o admin geral.','e');return;}
+    u.name=name;u.turno=document.getElementById('un-tr').value;u.units=units;
+    if(!isRoot(u))u.un=un;
+    if(canEditPerms){const p={};Object.keys(PL).forEach(k=>{p[k]=document.getElementById('p-'+k)?.checked||false;});u.p=p;}
+    if(pw)u.pw=pw;
+    toast('Usuário atualizado!','s');
+  }else{
+    if(S.users.find(x=>x.un===un)){toast('Usuário já existe','e');return;}
+    const p={};
+    if(canEditPerms)Object.keys(PL).forEach(k=>{p[k]=document.getElementById('p-'+k)?.checked||false;});
+    else Object.keys(PL).forEach(k=>{p[k]=false;});
+    S.users.push({id:'u'+Date.now(),un,pw,name,turno:document.getElementById('un-tr').value,units,p,active:true});
+    toast('Usuário criado!','s');
+  }
+  closeModal();renderUsers();populateFilters();scheduleAutoSave();
+}
+
+function toggleUA(id){
+  const cu=S_cu;const u=S.users.find(x=>x.id===id);
+  if(isRoot(u)){toast('Admin geral não pode ser desativado.','e');return;}
+  if(u.id===cu.id){toast('Não pode desativar sua própria conta','e');return;}
+  if(!cu.p.isAdmin&&!isRoot(cu)){toast('Sem permissão.','e');return;}
+  u.active=!u.active;renderUsers();toast(u.active?'Ativado.':'Desativado.','i');scheduleAutoSave();
+}
+
+// ============ SETTINGS ============
+function renderCfg(){
+  const c=S.cfg;
+  document.getElementById('c-stitle').value=c.siteTitle||'';
+  document.getElementById('c-sub').value=c.sub||'';
+  document.getElementById('c-hdr').value=c.hdr||'';
+  document.getElementById('c-company').value=c.company||'';
+  document.getElementById('c-ftr').value=c.ftr||'';
+  document.getElementById('c-ver').value=c.ver||'';
+  document.getElementById('c-email').value=c.email||'';
+  renderUL();
+  document.querySelectorAll('.accent-o').forEach(el=>{el.style.outline=el.dataset.c===c.accent?'3px solid #fff':'none';el.style.outlineOffset='2px';});
+}
+
+function renderUL(){
+  const ul=document.getElementById('ul');ul.innerHTML='';
+  S.cfg.units.forEach((u,i)=>{
+    const d=document.createElement('div');d.style.cssText='display:flex;gap:7px;align-items:center';
+    d.innerHTML=`<input class="finput" value="${u}" style="flex:1" oninput="S.cfg.units[${i}]=this.value;populateFilters()">
+      <button class="btn btn-sm btn-d" onclick="S.cfg.units.splice(${i},1);renderUL();populateFilters()">🗑</button>`;
+    ul.appendChild(d);
+  });
+}
+
+function addUnit(){
+  const v=document.getElementById('nu-in').value.trim();if(!v)return;
+  S.cfg.units.push(v);document.getElementById('nu-in').value='';renderUL();populateFilters();
+}
+
+function setAccent(c){
+  S.cfg.accent=c;document.documentElement.style.setProperty('--accent',c);
+  document.querySelectorAll('.accent-o').forEach(el=>{el.style.outline=el.dataset.c===c?'3px solid #fff':'none';el.style.outlineOffset='2px';});
+}
+
+function applySettings(){
+  const c=S.cfg;
+  if(!c||!Object.keys(c).length)return;
+  if(document.getElementById('c-stitle')&&document.getElementById('v-cfg').style.display!=='none'){
+    c.siteTitle=document.getElementById('c-stitle').value||c.siteTitle;
+    c.sub=document.getElementById('c-sub').value||c.sub;
+    c.hdr=document.getElementById('c-hdr').value||c.hdr;
+    c.ftr=document.getElementById('c-ftr').value||c.ftr;
+    c.ver=document.getElementById('c-ver').value||c.ver;
+  }
+  document.getElementById('hdr-title').textContent=c.hdr||'';
+  document.getElementById('hdr-sub').textContent=c.sub||'';
+  document.getElementById('ftr-txt').textContent=c.ftr||'';
+  document.getElementById('ftr-ver').textContent=c.ver||'';
+  document.title=c.siteTitle||'SST';
+  document.getElementById('l-title').textContent=c.siteTitle||'SST';
+  if(c.accent)document.documentElement.style.setProperty('--accent',c.accent);
+}
+
+function saveSettings(){
+  S.cfg.siteTitle=document.getElementById('c-stitle').value;
+  S.cfg.sub=document.getElementById('c-sub').value;
+  S.cfg.hdr=document.getElementById('c-hdr').value;
+  S.cfg.company=document.getElementById('c-company').value;
+  S.cfg.ftr=document.getElementById('c-ftr').value;
+  S.cfg.ver=document.getElementById('c-ver').value;
+  S.cfg.email=document.getElementById('c-email').value;
+  applySettings();
+  publishToGitHub();
+  toast('Configurações salvas e publicadas!','s');
+}
+
+// ============ MODAL / TOAST ============
+function showModal(html,lg){document.getElementById('mc').innerHTML=`<div class="overlay" onclick="closeModal()"><div class="modal${lg?' modal-lg':''}" onclick="event.stopPropagation()">${html}</div></div>`;}
+function closeModal(){document.getElementById('mc').innerHTML='';}
+function toast(msg,t='i'){
+  const c=document.getElementById('tc');const el=document.createElement('div');
+  el.className=`toast ${t}`;el.innerHTML=`<span>${{s:'✅',e:'❌',i:'ℹ️'}[t]||'ℹ️'}</span> ${msg}`;
+  c.appendChild(el);setTimeout(()=>el.remove(),3500);
+}
+</script>
+</body>
+</html>
