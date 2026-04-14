@@ -247,6 +247,10 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
           <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.5" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
           Lista
         </div>
+        <div class="nav-item" id="n-concluidas" onclick="setView('concluidas')">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.5" d="M9 11l3 3L22 4"/><path stroke-width="1.5" d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          Concluídas<span class="sc" id="sc-conc">0</span>
+        </div>
       </div>
       <div class="sb-section">
         <div class="sb-lbl">Comunicação</div>
@@ -271,15 +275,15 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
         </div>
       </div>
       <div class="sb-section">
-        <div class="sb-lbl">Status</div>
+        <div class="sb-lbl">Filtrar</div>
         <div class="nav-item" onclick="setQF('atrasado')"><span style="color:var(--red)">●</span> Atrasadas<span class="sc hot" id="sc-at">0</span></div>
         <div class="nav-item" onclick="setQF('andamento')"><span style="color:var(--amber)">●</span> Em andamento<span class="sc" id="sc-and">0</span></div>
-        <div class="nav-item" onclick="setQF('concluido')"><span style="color:var(--green)">●</span> Concluídas<span class="sc" id="sc-ok">0</span></div>
+        <div class="nav-item" onclick="setQF('revisao')"><span style="color:var(--purple)">●</span> Em revisão<span class="sc" id="sc-rev">0</span></div>
         <div class="nav-item" onclick="setQF(null)"><span style="color:var(--text3)">●</span> Todas</div>
       </div>
       <div class="sb-bottom">
         <div class="mini-g">
-          <div class="mini-c"><div class="mini-v" id="sb-tot">0</div><div class="mini-l">Total</div></div>
+          <div class="mini-c"><div class="mini-v" id="sb-tot">0</div><div class="mini-l">Ativas</div></div>
           <div class="mini-c"><div class="mini-v" id="sb-ok" style="color:var(--green)">0</div><div class="mini-l">Concluídas</div></div>
         </div>
       </div>
@@ -316,9 +320,27 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
         <div class="toolbar">
           <span class="toolbar-title">Lista de Tarefas</span>
           <button class="btn btn-p" id="btn-ntl" style="display:none" onclick="openTaskModal()">+ Nova Tarefa</button>
+          <button class="btn btn-d" id="btn-del-sel" style="display:none" onclick="delSelected()">🗑 Excluir selecionadas</button>
         </div>
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl)">
-          <div class="tw"><table class="dt"><thead><tr><th>Título</th><th>Responsável</th><th>Unidade</th><th>Turno</th><th>Prazo</th><th>Status</th><th>Prio.</th><th>Ações</th></tr></thead><tbody id="lt-body"></tbody></table></div>
+          <div class="tw"><table class="dt"><thead><tr>
+            <th id="th-chk" style="display:none"><input type="checkbox" id="chk-all" onchange="toggleAllChk(this)" style="accent-color:var(--accent)"></th>
+            <th>Título</th><th>Responsável</th><th>Unidade</th><th>Turno</th><th>Início</th><th>Prazo</th><th>Status</th><th>Prio.</th><th>Ações</th>
+          </tr></thead><tbody id="lt-body"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- CONCLUÍDAS -->
+      <div id="v-concluidas" style="display:none">
+        <div class="toolbar">
+          <span class="toolbar-title">✅ Tarefas Concluídas</span>
+          <button class="btn btn-d" id="btn-del-conc" style="display:none" onclick="delSelectedConc()">🗑 Excluir selecionadas</button>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl)">
+          <div class="tw"><table class="dt"><thead><tr>
+            <th id="th-chk-c" style="display:none"><input type="checkbox" id="chk-all-c" onchange="toggleAllChkConc(this)" style="accent-color:var(--accent)"></th>
+            <th>Título</th><th>Responsável</th><th>Unidade</th><th>Turno</th><th>Início</th><th>Prazo</th><th>Prio.</th><th>Ações</th>
+          </tr></thead><tbody id="ct-body"></tbody></table></div>
         </div>
       </div>
 
@@ -436,7 +458,8 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
 
 <script>
 // ============ CONSTANTS ============
-const COLS=[{k:'pendente',l:'Pendente',c:'#64748b'},{k:'andamento',l:'Em Andamento',c:'#f59e0b'},{k:'revisao',l:'Em Revisão',c:'#a855f7'},{k:'concluido',l:'Concluído',c:'#22c55e'}];
+// Kanban shows only non-concluded columns
+const COLS=[{k:'pendente',l:'Pendente',c:'#64748b'},{k:'andamento',l:'Em Andamento',c:'#f59e0b'},{k:'revisao',l:'Em Revisão',c:'#a855f7'}];
 const PL={changeSelf:'Alterar próprio status',changeAll:'Alterar qualquer status',addObs:'Adicionar observações',editTask:'Editar tarefas',manageTask:'Criar/replicar tarefas',deleteTask:'Excluir tarefas',isAdmin:'Administrador'};
 const ROOT_UN='admin';
 const MSG_TYPES=['Solicitação','Sugestão','Crítica','Dúvida','Outro'];
@@ -583,12 +606,10 @@ function applyData(data, manual=false){
 
   if(S_cu){
     updateCounts();
-    // Only re-render Kanban if not currently dragging
     if(!dragId) renderKanban();
-    // Re-render list if visible
-    if(document.getElementById('v-list').style.display !== 'none') renderList();
-    // Re-render messages if visible
-    if(document.getElementById('v-msgs').style.display !== 'none') renderMsgs();
+    if(document.getElementById('v-list')?.style.display !== 'none') renderList();
+    if(document.getElementById('v-concluidas')?.style.display !== 'none') renderConcluidas();
+    if(document.getElementById('v-msgs')?.style.display !== 'none') renderMsgs();
   }
 }
 
@@ -702,13 +723,15 @@ function changePassword(){
 
 // ============ VIEWS ============
 function setView(v){
-  ['kanban','list','msgs','users','cfg','github'].forEach(x=>{
-    document.getElementById('v-'+x).style.display=x===v?'block':'none';
+  ['kanban','list','concluidas','msgs','users','cfg','github'].forEach(x=>{
+    const el=document.getElementById('v-'+x);
+    if(el)el.style.display=x===v?'block':'none';
     const n=document.getElementById('n-'+x);
     if(n)n.classList.toggle('active',x===v);
   });
   if(v==='kanban')renderKanban();
   if(v==='list')renderList();
+  if(v==='concluidas')renderConcluidas();
   if(v==='msgs')renderMsgs();
   if(v==='users')renderUsers();
   if(v==='cfg')renderCfg();
@@ -735,6 +758,7 @@ function populateFilters(){
 }
 
 function getFT(){
+  // Kanban e Lista mostram apenas tarefas NÃO concluídas
   const q=(document.getElementById('fi-q')?.value||'').toLowerCase();
   const fu=document.getElementById('fi-unit')?.value||'';
   const ft=document.getElementById('fi-turno')?.value||'';
@@ -742,10 +766,11 @@ function getFT(){
   const tod=today();
   return S.tasks.filter(t=>{
     if(!canSeeTask(t,S_cu))return false;
+    if(t.status==='concluido')return false; // concluídas ficam na aba própria
     if(S_qf==='atrasado'&&!overdue(t))return false;
     if(S_qf==='andamento'&&t.status!=='andamento')return false;
-    if(S_qf==='concluido'&&t.status!=='concluido')return false;
-    if(q&&!t.title.toLowerCase().includes(q)&&!t.desc.toLowerCase().includes(q))return false;
+    if(S_qf==='revisao'&&t.status!=='revisao')return false;
+    if(q&&!t.title.toLowerCase().includes(q)&&!(t.desc||'').toLowerCase().includes(q))return false;
     if(fu&&t.unit!==fu)return false;
     if(ft&&t.turno!=='conjunto'&&t.turno!==ft)return false;
     if(fp==='hoje'){const d=new Date(t.due);d.setHours(0,0,0,0);if(d.getTime()!==tod.getTime())return false;}
@@ -758,16 +783,24 @@ function getFT(){
 
 function updateCounts(){
   const vis=S.tasks.filter(t=>canSeeTask(t,S_cu));
-  document.getElementById('sc-k').textContent=vis.filter(t=>t.status!=='concluido').length;
-  document.getElementById('sc-at').textContent=vis.filter(overdue).length;
-  document.getElementById('sc-and').textContent=vis.filter(t=>t.status==='andamento').length;
-  document.getElementById('sc-ok').textContent=vis.filter(t=>t.status==='concluido').length;
-  document.getElementById('sb-tot').textContent=vis.length;
-  document.getElementById('sb-ok').textContent=vis.filter(t=>t.status==='concluido').length;
+  const active=vis.filter(t=>t.status!=='concluido');
+  document.getElementById('sc-k').textContent=active.length;
+  document.getElementById('sc-at').textContent=active.filter(overdue).length;
+  document.getElementById('sc-and').textContent=active.filter(t=>t.status==='andamento').length;
+  document.getElementById('sc-rev').textContent=active.filter(t=>t.status==='revisao').length;
+  const conc=vis.filter(t=>t.status==='concluido');
+  document.getElementById('sc-conc').textContent=conc.length;
+  document.getElementById('sb-tot').textContent=active.length;
+  document.getElementById('sb-ok').textContent=conc.length;
   updateMsgBadge();
 }
 
-function setQF(f){S_qf=f;renderKanban();updateCounts();}
+function setQF(f){
+  S_qf=f;
+  renderKanban();
+  if(document.getElementById('v-list')?.style.display!=='none')renderList();
+  updateCounts();
+}
 
 // ============ KANBAN ============
 let dragId=null;
@@ -809,7 +842,8 @@ function appendCard(t,colK){
     <div class="tc-title">${t.title}</div>
     ${t.desc?`<div class="tc-desc">${t.desc}</div>`:''}
     <div class="tc-meta">
-      <span class="badge ${ov?'b-red':'b-gray'}">${ov?'⚠ Atrasada':'📅 '+fmtD(t.due)}</span>
+      <span class="badge ${ov?'b-red':'b-gray'}">${ov?'⚠ Vencida':'📅 '+fmtD(t.due)}</span>
+      ${t.start?`<span class="badge b-gray">🗓 ${fmtD(t.start)}</span>`:''}
       <span class="badge ${t.prio==='alta'?'b-red':t.prio==='media'?'b-amber':'b-green'}">${t.prio}</span>
       <span class="badge b-gray">${t.unit}</span>
       ${isJ?'<span class="badge b-purple">🤝 Conjunta</span>':''}
@@ -841,7 +875,7 @@ function onDrop(e,col){
   const old=slbl(t.status),nlbl=slbl(col);
   t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:`Status: "${old}" → "${nlbl}".`,t:'s'});
   t.status=col;
-  simEmail(t,cu,`Status: "${old}" → "${nlbl}"`);
+  notifyAdmins(t,cu,`Status alterado: "${old}" → "${nlbl}"`);
   dragId=null;renderKanban();toast(`Status alterado para "${nlbl}"`, 's');
   scheduleAutoSave();
 }
@@ -850,16 +884,21 @@ function onDrop(e,col){
 function renderList(){
   const b=document.getElementById('lt-body');b.innerHTML='';
   const ft=getFT();
-  if(!ft.length){b.innerHTML='<tr><td colspan="8" class="empty">Nenhuma tarefa encontrada.</td></tr>';return;}
   const cu=S_cu;
   const isAdminUser=isRoot(cu)||cu.p.isAdmin;
+  // Mostra coluna de checkbox só para admins
+  document.getElementById('th-chk').style.display=isAdminUser?'':'none';
+  document.getElementById('btn-del-sel').style.display=isAdminUser?'inline-flex':'none';
+  if(!ft.length){b.innerHTML=`<tr><td colspan="${isAdminUser?10:9}" class="empty">Nenhuma tarefa encontrada.</td></tr>`;return;}
   ft.forEach(t=>{
     const u=S.users.find(x=>x.id===t.uid)||{name:'—'};
     const ov=overdue(t);const isJ=t.turno==='conjunto';
     b.innerHTML+=`<tr>
-      <td style="font-weight:500;max-width:200px">${t.title}${isJ?' <span class="badge b-purple">🤝</span>':''}</td>
+      <td style="display:${isAdminUser?'':'none'}"><input type="checkbox" class="lt-chk" value="${t.id}" style="accent-color:var(--accent)"></td>
+      <td style="font-weight:500;max-width:180px">${t.title}${isJ?' <span class="badge b-purple">🤝</span>':''}</td>
       <td>${u.name}</td><td>${t.unit}</td>
-      <td>${isJ?'🌞🌙 Ambos':t.turno==='noturno'?'🌙 Noturno':'🌞 Diurno'}</td>
+      <td>${isJ?'🌞🌙':t.turno==='noturno'?'🌙':'🌞'}</td>
+      <td style="font-size:12px;color:var(--text3)">${fmtD(t.start)}</td>
       <td style="color:${ov?'var(--red)':'inherit'}">${fmtD(t.due)}</td>
       <td><span class="badge ${scol(t.status)}">${slbl(t.status)}</span></td>
       <td><span class="badge ${t.prio==='alta'?'b-red':t.prio==='media'?'b-amber':'b-green'}">${t.prio}</span></td>
@@ -870,6 +909,65 @@ function renderList(){
       </div></td>
     </tr>`;
   });
+}
+
+function toggleAllChk(cb){
+  document.querySelectorAll('.lt-chk').forEach(c=>c.checked=cb.checked);
+}
+
+function delSelected(){
+  const ids=[...document.querySelectorAll('.lt-chk:checked')].map(c=>c.value);
+  if(!ids.length){toast('Selecione ao menos uma tarefa','e');return;}
+  showModal(`<div class="modal-hdr"><div class="modal-ttl" style="color:var(--red)">⚠️ Excluir tarefas</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body"><p style="color:var(--text2)">Excluir <strong>${ids.length} tarefa(s)</strong> selecionada(s)? Esta ação é permanente.</p></div>
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-d" onclick="_delMultiple(${JSON.stringify(ids)})">🗑 Excluir tudo</button></div>`);
+}
+
+function _delMultiple(ids){
+  S.tasks=S.tasks.filter(x=>!ids.includes(x.id));
+  closeModal();renderList();renderKanban();updateCounts();
+  toast(`${ids.length} tarefa(s) excluída(s).`,'i');scheduleAutoSave();
+}
+
+// ============ CONCLUÍDAS ============
+function renderConcluidas(){
+  const b=document.getElementById('ct-body');b.innerHTML='';
+  const cu=S_cu;
+  const isAdminUser=isRoot(cu)||cu.p.isAdmin;
+  document.getElementById('th-chk-c').style.display=isAdminUser?'':'none';
+  document.getElementById('btn-del-conc').style.display=isAdminUser?'inline-flex':'none';
+  const conc=S.tasks.filter(t=>canSeeTask(t,cu)&&t.status==='concluido');
+  if(!conc.length){b.innerHTML=`<tr><td colspan="${isAdminUser?9:8}" class="empty">Nenhuma tarefa concluída.</td></tr>`;return;}
+  conc.sort((a,b)=>(b.due||'').localeCompare(a.due||''));
+  conc.forEach(t=>{
+    const u=S.users.find(x=>x.id===t.uid)||{name:'—'};
+    const isJ=t.turno==='conjunto';
+    b.innerHTML+=`<tr>
+      <td style="display:${isAdminUser?'':'none'}"><input type="checkbox" class="ct-chk" value="${t.id}" style="accent-color:var(--accent)"></td>
+      <td style="font-weight:500;max-width:180px">${t.title}${isJ?' <span class="badge b-purple">🤝</span>':''}</td>
+      <td>${u.name}</td><td>${t.unit}</td>
+      <td>${isJ?'🌞🌙':t.turno==='noturno'?'🌙':'🌞'}</td>
+      <td style="font-size:12px;color:var(--text3)">${fmtD(t.start)}</td>
+      <td>${fmtD(t.due)}</td>
+      <td><span class="badge ${t.prio==='alta'?'b-red':t.prio==='media'?'b-amber':'b-green'}">${t.prio}</span></td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn btn-sm" onclick="openDetail('${t.id}')">Ver</button>
+        ${isAdminUser?`<button class="btn btn-sm btn-d" onclick="delTask('${t.id}')">🗑</button>`:''}
+      </div></td>
+    </tr>`;
+  });
+}
+
+function toggleAllChkConc(cb){
+  document.querySelectorAll('.ct-chk').forEach(c=>c.checked=cb.checked);
+}
+
+function delSelectedConc(){
+  const ids=[...document.querySelectorAll('.ct-chk:checked')].map(c=>c.value);
+  if(!ids.length){toast('Selecione ao menos uma tarefa','e');return;}
+  showModal(`<div class="modal-hdr"><div class="modal-ttl" style="color:var(--red)">⚠️ Excluir tarefas</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body"><p style="color:var(--text2)">Excluir <strong>${ids.length} tarefa(s)</strong> concluída(s)? Esta ação é permanente.</p></div>
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-d" onclick="_delMultiple(${JSON.stringify(ids)})">🗑 Excluir tudo</button></div>`);
 }
 
 // ============ TASK MODAL (ADMIN ONLY - MOD 02) ============
@@ -895,7 +993,8 @@ function openTaskModal(defCol,eid){
   const t=eid?S.tasks.find(x=>x.id===eid):null;
   const uopts=S.users.filter(u=>u.active&&(!isRoot({un:u.un})||isRoot(cu))).map(u=>`<option value="${u.id}" ${t?.uid===u.id?'selected':''}>${u.name} (${u.turno})</option>`).join('');
   const unopts=S.cfg.units.map(u=>`<option value="${u}" ${t?.unit===u?'selected':''}>${u}</option>`).join('');
-  const copts=COLS.map(c=>`<option value="${c.k}" ${(t?.status||defCol||'pendente')===c.k?'selected':''}>${c.l}</option>`).join('');
+  const allCols=[...COLS,{k:'concluido',l:'Concluído'}];
+  const copts=allCols.map(c=>`<option value="${c.k}" ${(t?.status||defCol||'pendente')===c.k?'selected':''}>${c.l}</option>`).join('');
   const isNew=!eid;
   showModal(`<div class="modal-hdr"><div class="modal-ttl">${t?'Editar Tarefa':'Nova Tarefa'}</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
@@ -1044,12 +1143,15 @@ function saveTask(eid){
         let units=[];
         const unitCbs=row.querySelectorAll('.rep-unit-cb');
         if(unitCbs.length>0){
-          // Usuário com múltiplas unidades — usa as selecionadas
+          // Usuário com múltiplas unidades — usa APENAS as selecionadas (que pertencem a ele)
           unitCbs.forEach(cb=>{if(cb.checked)units.push(cb.value);});
-          if(!units.length)units=repUser.units||[base.unit]; // fallback: todas
+          // Garante que só usa unidades que o usuário realmente pertence
+          units=units.filter(un=>repUser.units.includes(un));
+          if(!units.length)units=[repUser.units[0]]; // fallback: primeira unidade do usuário
         } else {
-          // Usuário com 1 unidade — usa a única
-          units=repUser.units&&repUser.units.length>=1?[repUser.units[0]]:[base.unit];
+          // Usuário com 1 unidade — usa apenas a que ele pertence
+          units=repUser.units&&repUser.units.length>=1?[repUser.units[0]]:[];
+          if(!units.length)return; // sem unidade definida, pula
         }
 
         // Cria uma tarefa para cada unidade selecionada
@@ -1058,7 +1160,8 @@ function saveTask(eid){
             id:'t'+(Date.now()+offset++),
             uid:uSel.value,
             unit:un,
-            due,
+            start:base.start,          // herda data de início da tarefa base
+            due:dInp?.value||base.due, // prazo individual se definido, senão herda
             status:'pendente',
             obs:[{by:cu.id,name:cu.name,dt:nowDt(),
               txt:`Replicada para ${repUser.name} — ${un}.`,t:'s'}]
@@ -1124,7 +1227,12 @@ function delTask(id){
   <div class="modal-body"><p style="color:var(--text2)">Excluir "<strong>${t?.title}</strong>"? Esta ação é permanente.</p></div>
   <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-d" onclick="_delTask('${id}')">🗑 Excluir</button></div>`);
 }
-function _delTask(id){S.tasks=S.tasks.filter(x=>x.id!==id);closeModal();renderKanban();updateCounts();toast('Tarefa excluída.','i');scheduleAutoSave();}
+function _delTask(id){
+  S.tasks=S.tasks.filter(x=>x.id!==id);
+  closeModal();renderKanban();renderConcluidas();updateCounts();
+  if(document.getElementById('v-list')?.style.display!=='none')renderList();
+  toast('Tarefa excluída.','i');scheduleAutoSave();
+}
 
 // ============ DETAIL ============
 function openDetail(id){
@@ -1135,7 +1243,15 @@ function openDetail(id){
   const canSt=isRoot(cu)||cu.p.isAdmin||cu.p.changeAll||(cu.p.changeSelf&&t.uid===cu.id)||(isJ&&cu.units.includes(t.unit)&&cu.p.changeSelf);
   const canObs=cu.p.addObs||cu.p.isAdmin||isRoot(cu);
   const ov=overdue(t);
-  const copts=COLS.map(c=>`<option value="${c.k}" ${t.status===c.k?'selected':''}>${c.l}</option>`).join('');
+  const isAdminUser=isRoot(cu)||cu.p.isAdmin;
+  // Usuário comum não pode colocar "Em Revisão" — só admin
+  const statusOpts=[
+    {k:'pendente',l:'Pendente'},
+    {k:'andamento',l:'Em Andamento'},
+    ...(isAdminUser?[{k:'revisao',l:'Em Revisão'}]:[]),
+    {k:'concluido',l:'Concluído'}
+  ];
+  const copts=statusOpts.map(c=>`<option value="${c.k}" ${t.status===c.k?'selected':''}>${c.l}</option>`).join('');
   const obsHTML=t.obs.map(o=>`<div class="obs-item ${o.t==='s'?'obs-sys':'obs-usr'}">
     <div class="obs-meta"><span>👤 ${o.name}</span><span>${o.dt}</span><span>${o.t==='s'?'sistema':'observação'}</span></div>
     <div class="obs-txt">${o.txt}</div>
@@ -1175,7 +1291,9 @@ function chgSt(id){
   t.obs.push({by:cu.id,name:cu.name,dt:nowDt(),txt:`Status: "${ol}" → "${nl}".`,t:'s'});
   t.status=ns;
   notifyAdmins(t,cu,`Status alterado: "${ol}" → "${nl}"`);
-  closeModal();renderKanban();updateCounts();toast(`Status → "${nl}"`, 's');scheduleAutoSave();
+  closeModal();renderKanban();renderConcluidas();updateCounts();
+  if(document.getElementById('v-list')?.style.display!=='none')renderList();
+  toast(`Status → "${nl}"`, 's');scheduleAutoSave();
 }
 
 function addObs(id){
@@ -1327,14 +1445,30 @@ async function sendEmail(to, subject, body){
 }
 
 function getAdminEmails(){
-  // Retorna e-mails do admin geral + todos com isAdmin=true
+  // Sempre inclui o email geral de configurações + emails de admins cadastrados
   const emails=[];
+  // Email geral das configurações (sempre incluído se existir)
+  if(S.cfg.email)emails.push(S.cfg.email);
+  // Emails individuais de admins com email cadastrado
   S.users.forEach(u=>{
-    if((isRoot(u)||u.p?.isAdmin)&&u.email)emails.push(u.email);
+    if((isRoot(u)||u.p?.isAdmin)&&u.email&&u.email!==S.cfg.email)emails.push(u.email);
   });
-  // Fallback para email geral das configurações
-  if(!emails.length&&S.cfg.email)emails.push(S.cfg.email);
   return [...new Set(emails)];
+}
+
+function notifyAdmins(task,byU,action){
+  const emails=getAdminEmails();
+  if(!emails.length){
+    console.warn('[NOTIFY] Nenhum email de admin configurado. Configure em Configurações > E-mail.');
+    return;
+  }
+  const taskUser=S.users.find(x=>x.id===task.uid);
+  emails.forEach(email=>{
+    sendEmail(email,
+      `[SST] Tarefa atualizada: "${task.title}"`,
+      `Olá,\n\n${byU.name} realizou uma ação na tarefa:\n\n📋 ${task.title}\n👤 Responsável: ${taskUser?.name||'—'}\n📍 Unidade: ${task.unit}\n🔄 Ação: ${action}\n\nAcesse o sistema para mais detalhes.`
+    );
+  });
 }
 
 function getUserEmail(uid){
@@ -1344,22 +1478,12 @@ function getUserEmail(uid){
 
 function notifyTaskCreated(task){
   const u=S.users.find(x=>x.id===task.uid);
-  if(!u||!u.email)return;
-  sendEmail(u.email,
-    `[SST] Nova tarefa: "${task.title}"`,
-    `Olá ${u.name},\n\nUma nova tarefa foi atribuída a você:\n\n📋 ${task.title}\n📍 Unidade: ${task.unit}\n📅 Prazo: ${fmtD(task.due)}\n⚠️ Prioridade: ${task.prio}\n\nAcesse o sistema para mais detalhes.`
-  );
-}
-
-function notifyAdmins(task,byU,action){
-  const emails=getAdminEmails();
-  const u=S.users.find(x=>x.id===task.uid);
-  emails.forEach(email=>{
-    sendEmail(email,
-      `[SST] Tarefa atualizada: "${task.title}"`,
-      `Olá,\n\n${byU.name} realizou uma ação na tarefa:\n\n📋 ${task.title}\n👤 Responsável: ${u?.name||'—'}\n📍 Unidade: ${task.unit}\n🔄 Ação: ${action}\n\nAcesse o sistema para mais detalhes.`
+  if(u?.email){
+    sendEmail(u.email,
+      `[SST] Nova tarefa atribuída: "${task.title}"`,
+      `Olá ${u.name},\n\nUma nova tarefa foi atribuída a você:\n\n📋 ${task.title}\n📍 Unidade: ${task.unit}\n🗓 Início: ${fmtD(task.start)}\n📅 Prazo: ${fmtD(task.due)}\n⚠️ Prioridade: ${task.prio}\n\nAcesse o sistema para mais detalhes.`
     );
-  });
+  }
 }
 
 function notifyMsgSent(msg){
