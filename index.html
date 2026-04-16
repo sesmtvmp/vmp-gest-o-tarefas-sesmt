@@ -1369,75 +1369,121 @@ function delMinhaTask(id){
 
 // ============ TASK MODAL ============
 function openTaskModal(defaultCol,eid){
-  const t=eid?S.tasks.find(x=>x.id===eid):null;const cu=S_cu;
+  const t=eid?S.tasks.find(x=>x.id===eid):null;
+  const cu=S_cu;
   const isAdm=isRoot(cu)||cu.p?.isAdmin;
   const users=S.users.filter(u=>u.active&&u.un!==ROOT_UN);
-  const uu=S.cfg.units||[];
-  const uo=users.map(u=>`<option value="${u.id}" ${(t?.uid||cu.id)===u.id?'selected':''}>${u.name}</option>`).join('');
-  const uno=uu.map(u=>`<option value="${u}" ${(t?.unit||uu[0])===u?'selected':''}>${u}</option>`).join('');
-  // Checkboxes para replicar (só no modo criação e para admins)
-  const replicarHtml=(!eid&&isAdm)?`
+
+  // ── Modo EDIÇÃO: mantém campos simples ──────────────────
+  if(t){
+    const u=S.users.find(x=>x.id===t.uid)||{};
+    const uu=S.cfg.units||[];
+    const uno=uu.map(u=>`<option value="${u}" ${t.unit===u?'selected':''}>${u}</option>`).join('');
+    showModal(`<div class="modal-hdr"><div class="modal-ttl">Editar Tarefa</div><button class="ib" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="fg"><label class="flbl">Título *</label><input class="finput" id="tk-title" value="${t.title||''}"></div>
+      <div class="fg"><label class="flbl">Descrição</label><textarea class="fta" id="tk-desc">${t.desc||''}</textarea></div>
+      <div class="fgrid">
+        <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="tk-unit">${uno}</select></div>
+        <div class="fg"><label class="flbl">Prioridade</label><select class="fsel" id="tk-prio">
+          <option value="baixa" ${t.prio==='baixa'?'selected':''}>Baixa</option>
+          <option value="media" ${t.prio==='media'?'selected':''}>Média</option>
+          <option value="alta" ${t.prio==='alta'?'selected':''}>Alta</option>
+        </select></div>
+      </div>
+      <div class="fgrid">
+        <div class="fg"><label class="flbl">Início</label><input class="finput" type="date" id="tk-start" value="${t.start||nowDt()}"></div>
+        <div class="fg"><label class="flbl">Prazo *</label><input class="finput" type="date" id="tk-due" value="${t.due||''}"></div>
+      </div>
+      <div class="fg"><label class="flbl">Status</label><select class="fsel" id="tk-status">
+        <option value="pendente" ${t.status==='pendente'?'selected':''}>Pendente</option>
+        <option value="andamento" ${t.status==='andamento'?'selected':''}>Em Andamento</option>
+        <option value="revisao" ${t.status==='revisao'?'selected':''}>Em Revisão</option>
+        <option value="concluido" ${t.status==='concluido'?'selected':''}>Concluído</option>
+      </select></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTask('${eid}','')">💾 Salvar</button></div>`,true);
+    return;
+  }
+
+  // ── Modo CRIAÇÃO: sem responsável único, lista de responsáveis ──
+  // Cada usuário tem um select de unidade ao lado
+  const respRows=users.map(u=>{
+    const units=u.units||[];
+    const unitOpts=units.map(un=>`<option value="${un}">${un}</option>`).join('');
+    return `<div class="resp-row" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" class="rep-user-chk" value="${u.id}"
+        style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0"
+        onchange="toggleRespRow(this)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500">${u.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${u.turno==='noturno'?'🌙 Noturno':'🌞 Diurno'}</div>
+      </div>
+      <select class="fi rep-unit-sel" data-uid="${u.id}"
+        style="width:130px;opacity:0.4;pointer-events:none" disabled>
+        ${units.length>1?`<option value="">Selecione...</option>`:''}
+        ${unitOpts}
+      </select>
+    </div>`;
+  }).join('');
+
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">Nova Tarefa</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="fg"><label class="flbl">Título *</label><input class="finput" id="tk-title"></div>
+    <div class="fg"><label class="flbl">Descrição</label><textarea class="fta" id="tk-desc"></textarea></div>
+    <div class="fgrid">
+      <div class="fg"><label class="flbl">Prioridade</label><select class="fsel" id="tk-prio">
+        <option value="baixa">Baixa</option>
+        <option value="media" selected>Média</option>
+        <option value="alta">Alta</option>
+      </select></div>
+      <div class="fg"></div>
+    </div>
+    <div class="fgrid">
+      <div class="fg"><label class="flbl">Início</label><input class="finput" type="date" id="tk-start" value="${nowDt()}"></div>
+      <div class="fg"><label class="flbl">Prazo *</label><input class="finput" type="date" id="tk-due"></div>
+    </div>
     <div class="sep"></div>
     <div class="fg">
-      <label class="flbl">🔁 Replicar para outros usuários <span style="font-size:10px;color:var(--text3)">(opcional — cada um receberá sua própria cópia)</span></label>
-      <div class="cb-g" style="max-height:160px;overflow-y:auto;margin-top:4px">
-        ${users.filter(u=>u.id!==(t?.uid||cu.id)).map(u=>`<label class="cb-item">
-          <input type="checkbox" class="rep-user-chk" value="${u.id}" style="accent-color:var(--accent)"> ${u.name}
-          <span style="font-size:10px;color:var(--text3)">(${(u.units||[]).join(', ')||'—'} · ${u.turno==='noturno'?'🌙':'🌞'})</span>
-        </label>`).join('')}
+      <label class="flbl" style="margin-bottom:8px;display:block">
+        👥 Responsáveis
+        <span style="font-size:10px;color:var(--text3);font-weight:400"> — selecione os usuários e a unidade de cada um</span>
+      </label>
+      <div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);padding:0 10px">
+        ${respRows||'<div class="empty">Nenhum usuário cadastrado.</div>'}
       </div>
-    </div>`:'';
-  showModal(`<div class="modal-hdr"><div class="modal-ttl">${t?'Editar Tarefa':'Nova Tarefa'}</div><button class="ib" onclick="closeModal()">✕</button></div>
-  <div class="modal-body">
-    <div class="fg"><label class="flbl">Título *</label><input class="finput" id="tk-title" value="${t?.title||''}"></div>
-    <div class="fg"><label class="flbl">Descrição</label><textarea class="fta" id="tk-desc">${t?.desc||''}</textarea></div>
-    <div class="fgrid">
-      <div class="fg"><label class="flbl">Responsável</label><select class="fsel" id="tk-uid" onchange="preencherUnitTurnoByUser()">${uo}</select></div>
-      <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="tk-unit">${uno}</select></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px" id="resp-counter">0 responsável(eis) selecionado(s)</div>
     </div>
-    <div class="fgrid">
-      <div class="fg"><label class="flbl">Turno</label><select class="fsel" id="tk-turno">
-        <option value="diurno" ${t?.turno==='diurno'||!t?'selected':''}>🌞 Diurno</option>
-        <option value="noturno" ${t?.turno==='noturno'?'selected':''}>🌙 Noturno</option>
-        <option value="conjunto" ${t?.turno==='conjunto'?'selected':''}>🌞🌙 Conjunto</option>
-      </select></div>
-      <div class="fg"><label class="flbl">Prioridade</label><select class="fsel" id="tk-prio">
-        <option value="baixa" ${t?.prio==='baixa'?'selected':''}>Baixa</option>
-        <option value="media" ${t?.prio==='media'||!t?'selected':''}>Média</option>
-        <option value="alta" ${t?.prio==='alta'?'selected':''}>Alta</option>
-      </select></div>
-    </div>
-    <div class="fgrid">
-      <div class="fg"><label class="flbl">Início</label><input class="finput" type="date" id="tk-start" value="${t?.start||nowDt()}"></div>
-      <div class="fg"><label class="flbl">Prazo *</label><input class="finput" type="date" id="tk-due" value="${t?.due||''}"></div>
-    </div>
-    ${t?`<div class="fg"><label class="flbl">Status</label><select class="fsel" id="tk-status">
-      <option value="pendente" ${t.status==='pendente'?'selected':''}>Pendente</option>
-      <option value="andamento" ${t.status==='andamento'?'selected':''}>Em Andamento</option>
-      <option value="revisao" ${t.status==='revisao'?'selected':''}>Em Revisão</option>
-      <option value="concluido" ${t.status==='concluido'?'selected':''}>Concluído</option>
-    </select></div>`:''}
-    ${replicarHtml}
   </div>
-  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTask('${eid||''}','${defaultCol||'pendente'}')">💾 Salvar</button></div>`,true);
-  // Auto-preenche unidade/turno ao abrir para novo usuário
-  if(!eid)setTimeout(()=>preencherUnitTurnoByUser(),50);
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTask('','${defaultCol||'pendente'}')">💾 Salvar</button></div>`,true);
 }
 
-// Preenche unidade e turno com base no usuário selecionado
+// Ativa/desativa o select de unidade quando checkbox é marcado
+function toggleRespRow(chk){
+  const row=chk.closest('.resp-row');
+  const sel=row?.querySelector('.rep-unit-sel');
+  if(sel){
+    sel.disabled=!chk.checked;
+    sel.style.opacity=chk.checked?'1':'0.4';
+    sel.style.pointerEvents=chk.checked?'auto':'none';
+  }
+  // Atualiza contador
+  const total=document.querySelectorAll('.rep-user-chk:checked').length;
+  const cnt=document.getElementById('resp-counter');
+  if(cnt)cnt.textContent=`${total} responsável(eis) selecionado(s)`;
+}
+
+// Preenche unidade e turno com base no usuário selecionado (edição)
 function preencherUnitTurnoByUser(){
   const uid=document.getElementById('tk-uid')?.value;
   if(!uid)return;
   const u=S.users.find(x=>x.id===uid);if(!u)return;
   const unitSel=document.getElementById('tk-unit');
   const turnoSel=document.getElementById('tk-turno');
-  // Turno do usuário
-  if(turnoSel&&u.turno){turnoSel.value=u.turno;}
-  // Unidade: se usuário tem só 1, seleciona; se tem várias, deixa em branco para escolher
-  if(unitSel&&u.units&&u.units.length===1){unitSel.value=u.units[0];}
-  else if(unitSel&&u.units&&u.units.length>1){
-    // Mantém unidade atual se já é válida para esse usuário, senão limpa
-    if(!u.units.includes(unitSel.value))unitSel.value=u.units[0]||'';
+  if(turnoSel&&u.turno)turnoSel.value=u.turno;
+  if(unitSel&&u.units){
+    if(u.units.length===1)unitSel.value=u.units[0];
+    else if(!u.units.includes(unitSel.value))unitSel.value=u.units[0]||'';
   }
 }
 
@@ -1445,36 +1491,67 @@ function saveTask(eid,defaultCol){
   const title=document.getElementById('tk-title').value.trim();
   const due=document.getElementById('tk-due').value;
   if(!title||!due){toast('Título e prazo obrigatórios','e');return;}
+
+  // ── MODO EDIÇÃO ──────────────────────────────────────────
   if(eid){
     const t=S.tasks.find(x=>x.id===eid);
-    if(t){t.title=title;t.desc=document.getElementById('tk-desc').value.trim();t.uid=document.getElementById('tk-uid').value;t.unit=document.getElementById('tk-unit').value;t.turno=document.getElementById('tk-turno').value;t.prio=document.getElementById('tk-prio').value;t.start=document.getElementById('tk-start').value;t.due=due;if(document.getElementById('tk-status'))t.status=document.getElementById('tk-status').value;}
-    closeModal();renderKanban();if(document.getElementById('v-list')?.style.display!=='none')renderList();updateCounts();scheduleAutoSave();toast('Tarefa atualizada!','s');
-  }else{
-    const baseTask={title,desc:document.getElementById('tk-desc').value.trim(),unit:document.getElementById('tk-unit').value,prio:document.getElementById('tk-prio').value,start:document.getElementById('tk-start').value,due,status:defaultCol,obs:[]};
-    const mainUid=document.getElementById('tk-uid').value;
-    const mainTurno=document.getElementById('tk-turno').value;
-    S.tasks.push({id:'t'+Date.now(),...baseTask,uid:mainUid,turno:mainTurno});
-    // Replicar para usuários selecionados
-    const repChecks=[...document.querySelectorAll('.rep-user-chk:checked')];
-    let repCount=0;
-    repChecks.forEach(chk=>{
-      const repUid=chk.value;
-      const repUser=S.users.find(x=>x.id===repUid);
-      if(!repUser)return;
-      // Turno do usuário replicado; unidade: se 1 usa a dele, se várias usa a mesma da tarefa principal se válida senão a primeira dele
-      const repTurno=repUser.turno||'diurno';
-      const repUnits=repUser.units||[];
-      const repUnit=repUnits.includes(baseTask.unit)?baseTask.unit:(repUnits[0]||baseTask.unit);
-      S.tasks.push({id:'t'+Date.now()+repUid,uid:repUid,turno:repTurno,unit:repUnit,...baseTask,obs:[]});
-      // Aviso para o usuário replicado
-      criarAvisoSistema(repUid,`📋 Nova tarefa atribuída: "${title}" · Prazo: ${fmtD(due)}`);
-      repCount++;
-    });
-    // Aviso para o responsável principal
-    criarAvisoSistema(mainUid,`📋 Nova tarefa atribuída: "${title}" · Prazo: ${fmtD(due)}`);
-    closeModal();renderKanban();if(document.getElementById('v-list')?.style.display!=='none')renderList();updateCounts();scheduleAutoSave();
-    toast(repCount>0?`Tarefa criada e replicada para ${repCount+1} usuário(s)!`:'Tarefa criada!','s');
+    if(t){
+      t.title=title;
+      t.desc=document.getElementById('tk-desc').value.trim();
+      t.unit=document.getElementById('tk-unit').value;
+      t.prio=document.getElementById('tk-prio').value;
+      t.start=document.getElementById('tk-start').value;
+      t.due=due;
+      if(document.getElementById('tk-status'))t.status=document.getElementById('tk-status').value;
+    }
+    closeModal();renderKanban();
+    if(document.getElementById('v-list')?.style.display!=='none')renderList();
+    updateCounts();scheduleAutoSave();toast('Tarefa atualizada!','s');
+    return;
   }
+
+  // ── MODO CRIAÇÃO: uma tarefa por responsável selecionado ──
+  const checked=[...document.querySelectorAll('.rep-user-chk:checked')];
+  if(!checked.length){toast('Selecione pelo menos um responsável','e');return;}
+
+  // Valida que todos os selecionados têm unidade escolhida
+  let invalid=false;
+  checked.forEach(chk=>{
+    const sel=document.querySelector(`.rep-unit-sel[data-uid="${chk.value}"]`);
+    if(!sel||!sel.value){
+      const u=S.users.find(x=>x.id===chk.value);
+      toast(`Selecione a unidade de ${u?.name||'usuário'}','e`);
+      invalid=true;
+    }
+  });
+  if(invalid)return;
+
+  const baseTask={
+    title,
+    desc:document.getElementById('tk-desc').value.trim(),
+    prio:document.getElementById('tk-prio').value,
+    start:document.getElementById('tk-start').value,
+    due,
+    status:defaultCol||'pendente',
+    obs:[]
+  };
+
+  let count=0;
+  checked.forEach(chk=>{
+    const uid=chk.value;
+    const user=S.users.find(x=>x.id===uid);if(!user)return;
+    const sel=document.querySelector(`.rep-unit-sel[data-uid="${uid}"]`);
+    const unit=sel?.value||user.units?.[0]||'';
+    const turno=user.turno||'diurno';
+    S.tasks.push({id:'t'+Date.now()+uid,...baseTask,uid,unit,turno});
+    criarAvisoSistema(uid,`📋 Nova tarefa atribuída: "${title}" · Prazo: ${fmtD(due)}`);
+    count++;
+  });
+
+  closeModal();renderKanban();
+  if(document.getElementById('v-list')?.style.display!=='none')renderList();
+  updateCounts();scheduleAutoSave();
+  toast(`Tarefa criada para ${count} responsável(eis)!`,'s');
 }
 
 function delTask(id){
