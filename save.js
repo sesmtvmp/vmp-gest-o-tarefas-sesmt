@@ -1,61 +1,59 @@
-// POST /api/save
-// Writes sst:data to Upstash Redis via HTTP REST API.
-// Env vars set automatically when you connect Upstash on Vercel Marketplace:
-//   UPSTASH_REDIS_REST_URL
-//   UPSTASH_REDIS_REST_TOKEN
+// api/save.js
+// Salva dados no Upstash Redis (Vercel KV)
+// Suporta payload principal + chunks de colaboradores separados
+// para contornar o limite de 4.5 MB da Vercel por requisição.
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Cache-Control', 'no-store');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const url   = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-  if (!url || !token) {
-    // Upstash not connected — acknowledge but don't crash
-    return res.status(200).json({ ok: true, warn: 'Upstash not configured, data not persisted' });
-  }
+  if (!url || !token) return res.status(500).json({ error: 'Redis not configured' });
 
   try {
     const body = req.body;
-    if (!body || typeof body !== 'object') {
-      return res.status(400).json({ error: 'Invalid JSON body' });
+    const updatedAt = new Date().toISOString();
+
+    // Decide o que veio no payload:
+    // - chunk_index presente  → é um chunk de colaboradores
+    // - caso contrário        → é o payload principal (sem colaboradores)
+
+    if (typeof body.chunk_index === 'number') {
+      // ── Chunk de colaboradores ─────────────────────────────────────
+      const { chunk_index, chunk_total, colaboradores } = body;
+      const key = `sst:colabs:chunk:${chunk_index}`;
+      const metaKey = 'sst:colabs:meta';
+
+      await kv(url, token, 'SET', key, JSON.stringify(colaboradores));
+
+      // Atualiza metadados do chunk (total de chunks)
+      await kv(url, token, 'SET', metaKey, JSON.stringify({ chunk_total, updatedAt }));
+
+      return res.status(200).json({ ok: true, chunk_index, updatedAt });
+
+    } else {
+      // ── Payload principal (sem colaboradores) ──────────────────────
+      const { colaboradores, ...mainPayload } = body;
+      mainPayload.updatedAt = updatedAt;
+
+      await kv(url, token, 'SET', 'sst:data', JSON.stringify(mainPayload));
+
+      return res.status(200).json({ ok: true, updatedAt });
     }
 
-    const payload = {
-      cfg:      body.cfg      || {},
-      users:    body.users    || [],
-      tasks:    body.tasks    || [],
-      messages: body.messages || [],
-      updatedAt: new Date().toISOString()
-    };
-
-    const valueStr = JSON.stringify(payload);
-
-    // Upstash REST: POST https://<url>/set/<key>  with body = the value
-    const r = await fetch(`${url}/set/sst:data`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(valueStr)   // Upstash expects the value as a JSON-encoded string
-    });
-
-    if (!r.ok) {
-      const errText = await r.text();
-      throw new Error(`Upstash HTTP ${r.status}: ${errText}`);
-    }
-
-    return res.status(200).json({ ok: true, updatedAt: payload.updatedAt });
-
-  } catch (err) {
-    console.error('[POST /api/save]', err.message);
-    return res.status(500).json({ error: 'Failed to save', detail: err.message });
+  } catch (e) {
+    console.error('[save]', e);
+    return res.status(500).json({ error: e.message });
   }
+}
+
+async function kv(url, token, cmd, key, value) {
+  const body = value !== undefined ? [cmd, key, value] : [cmd, key];
+  const r = await fetch(`${url}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`Redis ${cmd} failed: ${r.status}`);
+  return r.json();
 }

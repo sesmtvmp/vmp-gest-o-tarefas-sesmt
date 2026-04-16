@@ -527,12 +527,33 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
       <div id="v-oss" style="display:none">
         <div class="toolbar">
           <span class="toolbar-title">📋 Ordens de Serviço</span>
-          <select class="fi" id="oss-func-filter" onchange="renderOSS()" style="width:160px"><option value="">Todas as funções</option></select>
-          <select class="fi" id="oss-unit-f" onchange="renderOSS()" style="width:140px"><option value="">Todas as unidades</option></select>
+          <input class="fi" id="oss-q" placeholder="🔍 Prontuário ou nome..." oninput="ossSearch()" style="width:180px">
+          <select class="fi" id="oss-func-filter" onchange="ossResetPage()" style="width:160px"><option value="">Todas as funções</option></select>
+          <select class="fi" id="oss-unit-f" onchange="ossResetPage()" style="width:140px"><option value="">Todas as unidades</option></select>
+          <select class="fi" id="oss-status-f" onchange="ossResetPage()" style="width:140px">
+            <option value="">Todos os status</option>
+            <option value="entregue">Entregue</option>
+            <option value="pendente">Pendente</option>
+            <option value="desatualizada">Desatualizada</option>
+          </select>
           <button class="btn btn-warn btn-sm" id="btn-oss-desatualizar" style="display:none" onclick="openOSSDesatualizarModal()">⚠️ Marcar como Desatualizada</button>
           <button class="btn btn-p btn-sm" id="btn-oss-novo" style="display:none" onclick="openOSSModal()">+ Nova OS</button>
         </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+          <span id="oss-counter" style="font-size:12px;color:var(--text3)"></span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;color:var(--text3)">Exibir:</span>
+            <select class="fi" id="oss-per-page" onchange="ossResetPage()" style="width:80px">
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="200">200</option>
+              <option value="500">500</option>
+            </select>
+            <span style="font-size:12px;color:var(--text3)">por página</span>
+          </div>
+        </div>
         <div id="oss-content"></div>
+        <div id="oss-pagination" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 0;flex-wrap:wrap"></div>
       </div>
 
       <!-- =================== INSPEÇÕES =================== -->
@@ -734,7 +755,7 @@ const addMonths=(d,n)=>{if(!d)return'';const r=new Date(d);r.setMonth(r.getMonth
 const diffDays=(a,b)=>Math.round((new Date(b)-new Date(a))/(1000*60*60*24));
 
 // ============ STATE ============
-let S={cfg:{},users:[],tasks:[],messages:[],avisos:[],colaboradores:[],treinamentos:[],treinHistorico:[],oss:[],inspecoes:[],desvios:[],extintores:[],hidrantes:[],minhasTarefas:[]};
+let S={cfg:{},users:[],tasks:[],messages:[],avisos:[],colaboradores:[],treinamentos:[],treinHistorico:[],oss:[],ossHistorico:[],inspecoes:[],desvios:[],extintores:[],hidrantes:[],minhasTarefas:[]};
 let S_cu=null,S_qf=null;
 let _lastUpdatedAt=null,_pollTimer=null,_saveTimer=null,_saving=false;
 let dragId=null,_dashTreinFilter=null,_importPreview=[];
@@ -744,10 +765,14 @@ function showSaving(b){document.getElementById('saving-ind').style.display=b?'fl
 function setKVStatus(msg,color='var(--text3)'){const el=document.getElementById('kv-action-status');if(el)el.innerHTML=`<span style="color:${color}">${msg}</span>`;}
 function setLastSync(dt){_lastUpdatedAt=dt;const el=document.getElementById('kv-last-sync');if(el&&dt)el.textContent=new Date(dt).toLocaleString('pt-BR');}
 
+// ── Tamanho do chunk de colaboradores (nº de registros por request) ──
+// Vercel limita 4.5 MB por request; ~800 colaboradores × ~200 bytes ≈ 160 KB — bem abaixo do limite.
+const COLAB_CHUNK_SIZE = 800;
+
 async function loadFromKV(manual=false){
   try{
     const controller=new AbortController();
-    const tid=setTimeout(()=>controller.abort(),5000);
+    const tid=setTimeout(()=>controller.abort(),15000);
     const r=await fetch('/api/data?t='+Date.now(),{signal:controller.signal});
     clearTimeout(tid);
     if(!r.ok)throw new Error('HTTP '+r.status);
@@ -755,7 +780,11 @@ async function loadFromKV(manual=false){
     if(data.error)throw new Error(data.error);
     if(data._empty)return false;
     applyData(data,manual);setLastSync(data.updatedAt);
-    if(manual){toast('Dados atualizados!','s');setKVStatus('✅ Carregado em '+new Date().toLocaleTimeString('pt-BR'),'var(--green)');}
+    if(manual){
+      const n=(data.colaboradores||[]).length;
+      toast('Dados atualizados! ('+n+' colaboradores)','s');
+      setKVStatus('✅ Carregado em '+new Date().toLocaleTimeString('pt-BR'),'var(--green)');
+    }
     return true;
   }catch(e){
     if(manual){toast('Erro ao carregar: '+e.message,'e');setKVStatus('❌ Erro: '+e.message,'var(--red)');}
@@ -766,19 +795,48 @@ async function loadFromKV(manual=false){
 async function saveToKV(){
   if(_saving)return;_saving=true;showSaving(true);
   try{
-    const payload={cfg:S.cfg,users:S.users,tasks:S.tasks,messages:S.messages,avisos:S.avisos||[],
-      colaboradores:S.colaboradores||[],treinamentos:S.treinamentos||[],treinHistorico:S.treinHistorico||[],
-      oss:S.oss||[],inspecoes:S.inspecoes||[],desvios:S.desvios||[],
-      extintores:S.extintores||[],hidrantes:S.hidrantes||[],minhasTarefas:S.minhasTarefas||[]};
-    const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const res=await r.json();
-    if(res.error)throw new Error(res.error);
-    setLastSync(res.updatedAt);
-    setKVStatus('✅ Salvo em '+new Date().toLocaleTimeString('pt-BR'),'var(--green)');
-  }catch(e){toast('Erro ao salvar: '+e.message,'e');}
+    // 1. Payload principal — tudo EXCETO colaboradores
+    const mainPayload={
+      cfg:S.cfg,users:S.users,tasks:S.tasks,messages:S.messages,avisos:S.avisos||[],
+      treinamentos:S.treinamentos||[],treinHistorico:S.treinHistorico||[],
+      oss:S.oss||[],ossHistorico:S.ossHistorico||[],inspecoes:S.inspecoes||[],
+      desvios:S.desvios||[],extintores:S.extintores||[],hidrantes:S.hidrantes||[],
+      minhasTarefas:S.minhasTarefas||[]
+    };
+    const r1=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(mainPayload)});
+    if(!r1.ok)throw new Error('HTTP '+r1.status+' (dados principais)');
+    const res1=await r1.json();
+    if(res1.error)throw new Error(res1.error);
+
+    // 2. Colaboradores em chunks de COLAB_CHUNK_SIZE registros cada
+    const colabs=S.colaboradores||[];
+    const chunks=[];
+    for(let i=0;i<colabs.length;i+=COLAB_CHUNK_SIZE)chunks.push(colabs.slice(i,i+COLAB_CHUNK_SIZE));
+    const chunkTotal=Math.max(1,chunks.length);
+
+    // Garante que haja sempre pelo menos 1 chunk (mesmo vazio) para limpar chunks antigos
+    if(chunks.length===0)chunks.push([]);
+
+    // Envia em lotes de 5 paralelos
+    for(let i=0;i<chunks.length;i+=5){
+      await Promise.all(chunks.slice(i,i+5).map((ch,j)=>
+        fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({chunk_index:i+j,chunk_total:chunkTotal,colaboradores:ch})})
+        .then(r=>{if(!r.ok)throw new Error('Chunk '+(i+j)+' HTTP '+r.status);return r.json();})
+        .then(rs=>{if(rs.error)throw new Error(rs.error);})
+      ));
+    }
+
+    setLastSync(res1.updatedAt);
+    setKVStatus('✅ Salvo em '+new Date().toLocaleTimeString('pt-BR')+' — '+colabs.length+' colaboradores','var(--green)');
+  }catch(e){
+    console.error('[saveToKV]',e);
+    toast('Erro ao salvar: '+e.message,'e');
+    setKVStatus('❌ Erro: '+e.message,'var(--red)');
+  }
   finally{_saving=false;showSaving(false);}
 }
+
 
 function scheduleAutoSave(){clearTimeout(_saveTimer);_saveTimer=setTimeout(()=>saveToKV(),1500);}
 
@@ -806,6 +864,7 @@ function applyData(data,manual=false){
   if(data.treinamentos)S.treinamentos=data.treinamentos||[];
   if(data.treinHistorico)S.treinHistorico=data.treinHistorico||[];
   if(data.oss)S.oss=data.oss||[];
+  if(data.ossHistorico)S.ossHistorico=data.ossHistorico||[];
   if(data.inspecoes)S.inspecoes=data.inspecoes||[];
   if(data.desvios)S.desvios=data.desvios||[];
   if(data.extintores)S.extintores=data.extintores||[];
@@ -829,7 +888,7 @@ async function init(){
     applyData({
       cfg:{siteTitle:'SST Manager',sub:'Gestão de Segurança do Trabalho',hdr:'SST Manager',company:'Empresa SST',ftr:'© 2025 SST Manager',ver:'v2.0.0',email:'admin@empresa.com',accent:'#3b82f6',units:['Pinedo','Campo Limpo','Santo André']},
       users:[{id:'u1',un:'admin',pw:'sesmtvmp',name:'Administrador',turno:'diurno',units:['Pinedo','Campo Limpo','Santo André'],p:{changeSelf:true,changeAll:true,addObs:true,editTask:true,manageTask:true,deleteTask:true,isAdmin:true},active:true}],
-      tasks:[],messages:[],avisos:[],colaboradores:[],treinamentos:[],treinHistorico:[],oss:[],inspecoes:[],desvios:[],extintores:[],hidrantes:[],minhasTarefas:[]
+      tasks:[],messages:[],avisos:[],colaboradores:[],treinamentos:[],treinHistorico:[],oss:[],ossHistorico:[],inspecoes:[],desvios:[],extintores:[],hidrantes:[],minhasTarefas:[]
     });
   }
   document.getElementById('loading-screen').style.display='none';
@@ -865,7 +924,7 @@ function doLogin(){
   document.getElementById('ha').textContent=ini(u.name);
   document.getElementById('ha').style.background=abg(i);
   document.getElementById('ha').style.color=atc(i);
-  applySettings();populateFilters();updateCounts();renderKanban();updateMsgBadge();checkDeadlineAlerts();updateAvisosBadge();startPolling();
+  applySettings();populateFilters();applyDefaultUnit();updateCounts();renderKanban();updateMsgBadge();checkDeadlineAlerts();updateAvisosBadge();startPolling();
 }
 
 function doLogout(){
@@ -879,6 +938,20 @@ function doLogout(){
 
 // ============ VIEWS ============
 const ALL_VIEWS=['kanban','list','concluidas','minhas','avisos','msgs','users','cfg','github','dashboard','colaboradores','treinamentos','oss','inspecoes','desvios','extintores','relatorios'];
+
+// Aplica a unidade padrão do usuário nos selects depois de popular os filtros
+function applyDefaultUnit(){
+  const cu=S_cu;if(!cu)return;
+  const isAdm=isRoot(cu)||cu.p?.isAdmin;
+  if(isAdm)return; // admins escolhem livremente
+  const units=cu.units||[];
+  if(units.length!==1)return; // só força se tiver exatamente 1 unidade
+  ['fi-unit','li-unit','ci-unit','dash-unit','trein-unit-f','oss-unit-f','colab-unit-f','rel-unit'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&!el.value)el.value=units[0];
+  });
+}
+
 function setView(v){
   ALL_VIEWS.forEach(x=>{
     const el=document.getElementById('v-'+x);if(el)el.style.display=x===v?'block':'none';
@@ -892,31 +965,70 @@ function setView(v){
   else if(v==='msgs')renderMsgs();
   else if(v==='users')renderUsers();
   else if(v==='cfg')renderCfg();
-  else if(v==='dashboard'){populateFilters();renderDashboard();}
-  else if(v==='colaboradores'){populateColabFilters();_colabPage=0;renderColabs();}
-  else if(v==='treinamentos'){populateFilters();renderTreinamentos();}
-  else if(v==='oss'){populateOSSFilters();renderOSS();}
+  else if(v==='dashboard'){populateFilters();applyDefaultUnit();renderDashboard();}
+  else if(v==='colaboradores'){populateColabFilters();applyDefaultUnit();_colabPage=0;renderColabs();}
+  else if(v==='treinamentos'){populateFilters();applyDefaultUnit();renderTreinamentos();}
+  else if(v==='oss'){populateOSSFilters();applyDefaultUnit();ossResetPage();}
   else if(v==='inspecoes')renderInspecoes();
   else if(v==='desvios')renderDesvios();
   else if(v==='extintores')renderExtintores();
 }
 
 // ============ FILTERS ============
+
+// Retorna as unidades visíveis para o usuário atual:
+// admins/root → todas as unidades cadastradas no sistema
+// usuários comuns → apenas as unidades do seu próprio perfil
+function getUserUnits(){
+  const cu=S_cu;
+  if(!cu)return[];
+  const isAdm=isRoot(cu)||cu.p?.isAdmin;
+  const allUnits=S.cfg.units||[];
+  if(isAdm)return allUnits;
+  // Filtra para mostrar só as unidades que o usuário tem acesso
+  return allUnits.filter(u=>(cu.units||[]).includes(u));
+}
+
+// Retorna true se o usuário pode ver dados de uma determinada unidade
+function canSeeUnit(unit){
+  const cu=S_cu;if(!cu)return false;
+  if(isRoot(cu)||cu.p?.isAdmin)return true;
+  if(!unit)return true; // colaboradores sem unidade aparecem para todos (com aviso)
+  return(cu.units||[]).includes(unit);
+}
+
 function populateFilters(){
+  const visibleUnits=getUserUnits();
+  const isAdm=S_cu&&(isRoot(S_cu)||S_cu.p?.isAdmin);
   ['fi-unit','li-unit','ci-unit','dash-unit','trein-unit-f','oss-unit-f','colab-unit-f','rel-unit'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
     const prev=el.value;
-    el.innerHTML='<option value="">Todas as unidades</option>';
-    (S.cfg.units||[]).forEach(u=>el.innerHTML+=`<option value="${u}">${u}</option>`);
-    if(prev)el.value=prev;
+    // Admins veem "Todas as unidades"; usuários comuns veem apenas as suas
+    if(isAdm){
+      el.innerHTML='<option value="">Todas as unidades</option>';
+    } else {
+      // Se tem só 1 unidade, não faz sentido mostrar "Todas"
+      el.innerHTML=visibleUnits.length===1
+        ?`<option value="${visibleUnits[0]}">${visibleUnits[0]}</option>`
+        :'<option value="">Minhas unidades</option>';
+    }
+    visibleUnits.forEach(u=>{
+      if(isAdm||visibleUnits.length>1) // evita duplicar quando só tem 1
+        el.innerHTML+=`<option value="${u}">${u}</option>`;
+    });
+    // Restaura seleção anterior se ainda válida
+    if(prev&&visibleUnits.includes(prev))el.value=prev;
+    else if(!isAdm&&visibleUnits.length===1)el.value=visibleUnits[0];
   });
 }
+
 function populateColabFilters(){
   const funcs=[...new Set((S.colaboradores||[]).map(c=>c.funcao).filter(Boolean))].sort();
   const sel=document.getElementById('colab-func');
   if(sel){const prev=sel.value;sel.innerHTML='<option value="">Todas as funções</option>';funcs.forEach(f=>sel.innerHTML+=`<option value="${f}">${f}</option>`);if(prev)sel.value=prev;}
   populateFilters();
 }
+
 function populateOSSFilters(){
   const funcs=[...new Set((S.colaboradores||[]).map(c=>c.funcao).filter(Boolean))].sort();
   const sel=document.getElementById('oss-func-filter');
@@ -1407,10 +1519,11 @@ function getOSSStatus(colabId){
 function renderDashboard(){
   const el=document.getElementById('dash-content');if(!el)return;
   const unit=document.getElementById('dash-unit')?.value||'';
-  const colabs=(S.colaboradores||[]).filter(c=>c.status==='ativo'&&(!unit||!c.unidade||c.unidade===unit));
+  const colabs=(S.colaboradores||[]).filter(c=>c.status==='ativo'&&(!unit||c.unidade===unit)&&(!c.unidade||canSeeUnit(c.unidade)));
   let totalValid=0,totalAvencer=0,totalVencido=0;
   colabs.forEach(c=>{const sum=getColabTreinSummary(c.id);totalValid+=sum.validos;totalAvencer+=sum.a_vencer;totalVencido+=sum.vencidos;});
-  const ossDesat=(S.oss||[]).filter(o=>o.desatualizada).length;
+  const visColabs=new Set(colabs.map(c=>c.id));
+  const ossDesat=(S.oss||[]).filter(o=>o.desatualizada&&visColabs.has(o.colabId)).length;
   const inspAtrasado=(S.inspecoes||[]).filter(i=>i.status==='atrasado').length;
   const hoje=nowDt();
   const extVencidos=(S.extintores||[]).filter(e=>e.proxRecarga&&e.proxRecarga<hoje).length;
@@ -1486,6 +1599,8 @@ function getColabFiltered(){
 
   return (S.colaboradores||[])
     .filter(c=>{
+      // Restrição de unidade por perfil do usuário
+      if(c.unidade&&!canSeeUnit(c.unidade))return false;
       if(q){
         const nome=(c.nome||'').toLowerCase();
         const pront=(c.prontuario||'').toLowerCase();
@@ -1493,7 +1608,7 @@ function getColabFiltered(){
         if(!nome.includes(q)&&!pront.includes(q)&&!funcao.includes(q))return false;
       }
       if(func&&c.funcao!==func)return false;
-      if(unit&&c.unidade&&c.unidade!==unit)return false;
+      if(unit&&c.unidade!==unit)return false;
       if(status&&c.status!==status)return false;
       return true;
     })
@@ -1817,7 +1932,7 @@ function openColabDetail(id){
       <span style="font-size:12px;font-weight:600">📋 Ordem de Serviço</span>
       <span class="badge ${ossInfo.badge}">${ossInfo.label}</span>
     </div>
-    ${ossRec?`<div style="font-size:12px;color:var(--text2)">OS: ${ossRec.descricao||'—'} · Entregue: ${ossRec.dataEntrega?fmtDt(ossRec.dataEntrega):'Não'}</div>
+    ${ossRec?`<div style="font-size:12px;color:var(--text2)">Atualiz.: ${ossRec.dataAtualizacao?fmtDt(ossRec.dataAtualizacao):'—'} · Entregue: ${ossRec.dataEntrega?fmtDt(ossRec.dataEntrega):'Não'}</div>
     <button class="btn btn-sm" style="margin-top:6px" onclick="openOSSEditModal('${id}')">✏️ Atualizar OS</button>`:
     `<button class="btn btn-sm btn-p" onclick="openOSSEditModal('${id}')">+ Vincular OS</button>`}
     <div class="sep"></div>
@@ -1865,7 +1980,7 @@ function renderTreinamentos(){
   const unit=document.getElementById('trein-unit-f')?.value||'';
   const el=document.getElementById('trein-content');const statsEl=document.getElementById('trein-stats');if(!el)return;
   const treinamentos=(S.treinamentos||[]);
-  const colabs=(S.colaboradores||[]).filter(c=>c.status==='ativo'&&(!unit||!c.unidade||c.unidade===unit));
+  const colabs=(S.colaboradores||[]).filter(c=>c.status==='ativo'&&(!unit||c.unidade===unit)&&(!c.unidade||canSeeUnit(c.unidade)));
   let tv=0,tav=0,tve=0;
   treinamentos.forEach(tr=>{colabs.forEach(c=>{const st=getTreinStatus(tr.id,c.id);if(st.status==='valido')tv++;else if(st.status==='a_vencer')tav++;else if(st.status==='vencido')tve++;});});
   if(statsEl){statsEl.innerHTML=`
@@ -1946,41 +2061,119 @@ function delTrein(id){
   S.treinamentos=(S.treinamentos||[]).filter(x=>x.id!==id);renderTreinamentos();scheduleAutoSave();toast('Excluído','i');
 }
 
-// ============ OSS ============
-function renderOSS(){
-  const el=document.getElementById('oss-content');if(!el)return;
+// ============ OSS — paginação ============
+let _ossPage=0, _ossSearchTimer=null;
+
+function ossSearch(){clearTimeout(_ossSearchTimer);_ossSearchTimer=setTimeout(()=>ossResetPage(),300);}
+function ossResetPage(){_ossPage=0;renderOSS();}
+function ossGoPage(p){_ossPage=p;renderOSS();}
+
+function getOSSFiltered(){
+  const q=(document.getElementById('oss-q')?.value||'').toLowerCase().trim();
   const func=document.getElementById('oss-func-filter')?.value||'';
   const unit=document.getElementById('oss-unit-f')?.value||'';
-  const colabs=(S.colaboradores||[]).filter(c=>{
-    if(func&&c.funcao!==func)return false;
-    if(unit&&c.unidade&&c.unidade!==unit)return false;
-    if(c.status==='demitido')return false;return true;
-  });
-  const entregue=colabs.filter(c=>{const o=(S.oss||[]).find(x=>x.colabId===c.id);return o&&o.entregue&&!o.desatualizada;}).length;
-  const pendente=colabs.filter(c=>{const o=(S.oss||[]).find(x=>x.colabId===c.id);return !o||!o.entregue;}).length;
-  const desatualizada=colabs.filter(c=>{const o=(S.oss||[]).find(x=>x.colabId===c.id);return o&&o.desatualizada;}).length;
+  const sf=document.getElementById('oss-status-f')?.value||'';
+  const ossIdx=buildOSSIndex();
+  return (S.colaboradores||[])
+    .filter(c=>{
+      if(c.status==='demitido')return false;
+      // Restrição de unidade por perfil do usuário
+      if(c.unidade&&!canSeeUnit(c.unidade))return false;
+      if(q&&!(c.prontuario||'').toLowerCase().includes(q)&&!c.nome.toLowerCase().includes(q))return false;
+      if(func&&c.funcao!==func)return false;
+      if(unit&&c.unidade!==unit)return false;
+      if(sf){
+        const o=ossIdx[c.id];
+        if(sf==='entregue'&&!(o&&o.entregue&&!o.desatualizada))return false;
+        if(sf==='pendente'&&(o&&(o.entregue||o.desatualizada)))return false;
+        if(sf==='desatualizada'&&!(o&&o.desatualizada))return false;
+      }
+      return true;
+    })
+    .sort((a,b)=>{
+      const pa=parseInt(a.prontuario)||Infinity;
+      const pb=parseInt(b.prontuario)||Infinity;
+      if(pa!==pb)return pa-pb;
+      return (a.prontuario||'').localeCompare(b.prontuario||'');
+    });
+}
+
+function renderOSS(){
+  const el=document.getElementById('oss-content');
+  const paginEl=document.getElementById('oss-pagination');
+  const counterEl=document.getElementById('oss-counter');
+  if(!el)return;
+  const ossIdx=buildOSSIndex();
+  const allColabs=getOSSFiltered();
+  const total=allColabs.length;
+  const allActive=(S.colaboradores||[]).filter(c=>c.status!=='demitido'&&(!c.unidade||canSeeUnit(c.unidade)));
+  const entregue=allActive.filter(c=>{const o=ossIdx[c.id];return o&&o.entregue&&!o.desatualizada;}).length;
+  const pendente=allActive.filter(c=>{const o=ossIdx[c.id];return !o||(!o.entregue&&!o.desatualizada);}).length;
+  const desatualizada=allActive.filter(c=>{const o=ossIdx[c.id];return o&&o.desatualizada;}).length;
+  const perPage=parseInt(document.getElementById('oss-per-page')?.value)||100;
+  const totalPages=Math.max(1,Math.ceil(total/perPage));
+  if(_ossPage>=totalPages)_ossPage=totalPages-1;
+  const start=_ossPage*perPage;
+  const end=Math.min(start+perPage,total);
+  const pageColabs=allColabs.slice(start,end);
+  if(counterEl)counterEl.textContent=total===0?'Nenhum colaborador encontrado.':`Exibindo ${start+1}–${end} de ${total} colaboradores`;
   el.innerHTML=`
   <div class="stats-grid">
-    <div class="stat s-blue"><div class="stat-lbl">TOTAL</div><div class="stat-val">${colabs.length}</div></div>
+    <div class="stat s-blue"><div class="stat-lbl">TOTAL ATIVOS</div><div class="stat-val">${allActive.length}</div></div>
     <div class="stat s-green"><div class="stat-lbl">ENTREGUES</div><div class="stat-val">${entregue}</div></div>
     <div class="stat s-amber"><div class="stat-lbl">PENDENTES</div><div class="stat-val">${pendente}</div></div>
     <div class="stat s-red"><div class="stat-lbl">DESATUALIZADAS</div><div class="stat-val">${desatualizada}</div></div>
   </div>
-  ${desatualizada>0?`<div class="alert alert-warn">⚠ ${desatualizada} colaborador(es) com OS desatualizada — atualize as OSs o quanto antes.</div>`:''}
+  ${desatualizada>0?`<div class="alert alert-warn">⚠ ${desatualizada} colaborador(es) com OS desatualizada.</div>`:''}
   <div class="card"><div class="card-head"><div class="card-title">OS por Colaborador</div></div>
   <div class="no-pad"><div class="tw"><table class="dt">
-    <thead><tr><th>PRONTUÁRIO</th><th>COLABORADOR</th><th>FUNÇÃO</th><th>UNIDADE</th><th>DESCRIÇÃO OS</th><th>STATUS</th><th>ENTREGA</th><th>AÇÕES</th></tr></thead>
-    <tbody>${!colabs.length?`<tr><td colspan="8" class="empty">Nenhum colaborador.</td></tr>`:
-    colabs.map(c=>{const ossRec=(S.oss||[]).find(o=>o.colabId===c.id);const st=getOSSStatus(c.id);
+    <thead><tr><th>PRONTUÁRIO</th><th>COLABORADOR</th><th>FUNÇÃO</th><th>UNIDADE</th><th>ATUALIZ. OS</th><th>STATUS</th><th>ENTREGA / HIST.</th><th>AÇÕES</th></tr></thead>
+    <tbody>${!pageColabs.length?`<tr><td colspan="8" class="empty">Nenhum colaborador encontrado.</td></tr>`:
+    pageColabs.map(c=>{
+      const ossRec=ossIdx[c.id];
+      const st=ossRec?ossRec.desatualizada?{badge:'b-amber',label:'Desatualizada'}:ossRec.entregue?{badge:'b-green',label:'Entregue'}:{badge:'b-amber',label:'Pendente'}:{badge:'b-gray',label:'Sem OS'};
+      const hist=(S.ossHistorico||[]).filter(h=>h.colabId===c.id).length;
       return `<tr>
         <td class="mono" style="font-size:11px">${c.prontuario||'—'}</td>
-        <td class="td-main">${c.nome}</td><td>${c.funcao||'—'}</td><td>${c.unidade||'—'}</td>
-        <td style="font-size:11px;color:var(--text2)">${ossRec?.descricao||'—'}</td>
+        <td class="td-main">${c.nome}</td>
+        <td style="font-size:11px">${c.funcao||'—'}</td>
+        <td style="font-size:11px">${c.unidade||'—'}</td>
+        <td class="mono" style="font-size:11px">${ossRec?.dataAtualizacao?fmtDt(ossRec.dataAtualizacao):'—'}</td>
         <td><span class="badge ${st.badge}">${st.label}</span></td>
-        <td class="mono" style="font-size:11px">${ossRec?.dataEntrega?fmtDt(ossRec.dataEntrega):'—'}</td>
+        <td class="mono" style="font-size:11px">${ossRec?.dataEntrega?fmtDt(ossRec.dataEntrega):'—'}${hist>0?` <span class="badge b-blue" style="cursor:pointer" onclick="showOSSHist('${c.id}')" title="Ver histórico">📋 ${hist}</span>`:''}</td>
         <td><button class="btn btn-sm" onclick="openOSSEditModal('${c.id}')">${ossRec?'✏️':'+ OS'}</button></td>
-      </tr>`;}).join('')}</tbody>
+      </tr>`;
+    }).join('')}</tbody>
   </table></div></div></div>`;
+  if(paginEl){
+    if(totalPages<=1){paginEl.innerHTML='';return;}
+    const btns=[];
+    btns.push(`<button class="btn btn-sm" ${_ossPage===0?'disabled':''} onclick="ossGoPage(0)">«</button>`);
+    btns.push(`<button class="btn btn-sm" ${_ossPage===0?'disabled':''} onclick="ossGoPage(${_ossPage-1})">‹</button>`);
+    let pStart=Math.max(0,_ossPage-3);let pEnd=Math.min(totalPages-1,pStart+6);if(pEnd-pStart<6)pStart=Math.max(0,pEnd-6);
+    for(let p=pStart;p<=pEnd;p++)btns.push(`<button class="btn btn-sm${p===_ossPage?' btn-p':''}" onclick="ossGoPage(${p})">${p+1}</button>`);
+    btns.push(`<button class="btn btn-sm" ${_ossPage>=totalPages-1?'disabled':''} onclick="ossGoPage(${_ossPage+1})">›</button>`);
+    btns.push(`<button class="btn btn-sm" ${_ossPage>=totalPages-1?'disabled':''} onclick="ossGoPage(${totalPages-1})">»</button>`);
+    btns.push(`<span style="font-size:11px;color:var(--text3);margin-left:4px">Página ${_ossPage+1} de ${totalPages}</span>`);
+    paginEl.innerHTML=btns.join('');
+  }
+}
+
+function showOSSHist(colabId){
+  const c=(S.colaboradores||[]).find(x=>x.id===colabId);
+  const hist=(S.ossHistorico||[]).filter(h=>h.colabId===colabId).sort((a,b)=>(b.dt||'').localeCompare(a.dt||''));
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">📋 Histórico de OS — ${c?.nome||''}</div><button class="ib" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="tw"><table class="dt"><thead><tr><th>REGISTRO</th><th>ATUALIZ. OS</th><th>DATA ENTREGA</th><th>STATUS</th><th>OBS</th></tr></thead>
+    <tbody>${hist.length?hist.map(h=>`<tr>
+      <td class="mono" style="font-size:11px">${fmtDt(h.dt)||'—'}</td>
+      <td class="mono" style="font-size:11px">${fmtDt(h.dataAtualizacao)||'—'}</td>
+      <td class="mono" style="font-size:11px">${fmtDt(h.dataEntrega)||'—'}</td>
+      <td><span class="badge ${h.status==='entregue'?'b-green':h.status==='desatualizada'?'b-amber':'b-gray'}">${h.status==='entregue'?'Entregue':h.status==='desatualizada'?'Desatualizada':'Pendente'}</span></td>
+      <td style="font-size:11px;color:var(--text3)">${h.obs||'—'}</td>
+    </tr>`).join(''):`<tr><td colspan="5" class="empty">Sem histórico.</td></tr>`}</tbody>
+    </table></div>
+  </div>`);
 }
 
 function openOSSEditModal(colabId){
@@ -1988,25 +2181,30 @@ function openOSSEditModal(colabId){
   const ossRec=(S.oss||[]).find(o=>o.colabId===colabId);
   showModal(`<div class="modal-hdr"><div class="modal-ttl">OS — ${c?.nome||''}</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
-    <div class="fg"><label class="flbl">Descrição da OS</label><input class="finput" id="oss-e-desc" value="${ossRec?.descricao||''}"></div>
     <div class="fgrid">
+      <div class="fg"><label class="flbl">Data de Atualização da OS</label><input class="finput" type="date" id="oss-e-atu" value="${ossRec?.dataAtualizacao||nowDt()}"></div>
       <div class="fg"><label class="flbl">Data de Entrega</label><input class="finput" type="date" id="oss-e-data" value="${ossRec?.dataEntrega||''}"></div>
-      <div class="fg"><label class="flbl">Status</label><select class="fsel" id="oss-e-status">
-        <option value="pendente" ${!ossRec?.entregue?'selected':''}>Pendente</option>
-        <option value="entregue" ${ossRec?.entregue&&!ossRec?.desatualizada?'selected':''}>Entregue/Assinada</option>
-        <option value="desatualizada" ${ossRec?.desatualizada?'selected':''}>Desatualizada</option>
-      </select></div>
     </div>
+    <div class="fg"><label class="flbl">Status</label><select class="fsel" id="oss-e-status">
+      <option value="pendente" ${!ossRec?.entregue?'selected':''}>Pendente</option>
+      <option value="entregue" ${ossRec?.entregue&&!ossRec?.desatualizada?'selected':''}>Entregue/Assinada</option>
+      <option value="desatualizada" ${ossRec?.desatualizada?'selected':''}>Desatualizada</option>
+    </select></div>
+    <div class="fg"><label class="flbl">Observações</label><textarea class="fta" id="oss-e-obs" placeholder="Opcional...">${ossRec?.obs||''}</textarea></div>
   </div>
   <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveOSSEdit('${colabId}')">💾 Salvar</button></div>`);
 }
 
 function saveOSSEdit(colabId){
-  if(!S.oss)S.oss=[];
+  if(!S.oss)S.oss=[];if(!S.ossHistorico)S.ossHistorico=[];
   const st=document.getElementById('oss-e-status').value;
-  const rec={id:'oss'+Date.now(),colabId,descricao:document.getElementById('oss-e-desc').value.trim(),dataEntrega:document.getElementById('oss-e-data').value,entregue:st==='entregue',desatualizada:st==='desatualizada'};
+  const dataEntrega=document.getElementById('oss-e-data').value;
+  const dataAtualizacao=document.getElementById('oss-e-atu').value;
+  const obs=document.getElementById('oss-e-obs').value.trim();
+  const rec={id:'oss'+Date.now(),colabId,dataAtualizacao,dataEntrega,entregue:st==='entregue',desatualizada:st==='desatualizada',obs};
   const idx=(S.oss||[]).findIndex(o=>o.colabId===colabId);
   if(idx>=0)S.oss[idx]=rec;else S.oss.push(rec);
+  S.ossHistorico.push({id:'osh'+Date.now(),colabId,dataEntrega,dataAtualizacao,status:st,obs,registradoPor:S_cu?.id,dt:nowDt()});
   closeModal();renderOSS();scheduleAutoSave();toast('OS atualizada!','s');
 }
 
@@ -2014,9 +2212,9 @@ function openOSSDesatualizarModal(){
   const funcs=[...new Set((S.colaboradores||[]).map(c=>c.funcao).filter(Boolean))].sort();
   showModal(`<div class="modal-hdr"><div class="modal-ttl">⚠️ Marcar OS como Desatualizada em Lote</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
-    <div class="alert alert-warn">Todos os colaboradores das funções selecionadas terão suas OS marcadas como <strong>Desatualizada</strong>. Use quando uma OS for revisada.</div>
+    <div class="alert alert-warn">Todos os colaboradores das funções selecionadas terão suas OS marcadas como <strong>Desatualizada</strong>. Use quando uma OS for revisada e precisar ser redistribuída.</div>
     <div class="fg"><label class="flbl">Selecionar Função(ões)</label>
-      <div class="cb-g" id="oss-desat-funcs">${funcs.map(f=>`<label class="cb-item"><input type="checkbox" value="${f}"> ${f}</label>`).join('')||'<span style="font-size:12px;color:var(--text3)">Nenhuma função cadastrada.</span>'}</div>
+      <div class="cb-g" id="oss-desat-funcs" style="max-height:280px;overflow-y:auto">${funcs.map(f=>`<label class="cb-item"><input type="checkbox" value="${f}"> ${f}</label>`).join('')||'<span style="font-size:12px;color:var(--text3)">Nenhuma função cadastrada.</span>'}</div>
     </div>
   </div>
   <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-warn" onclick="confirmOSSDesatualizar()">⚠️ Confirmar</button></div>`);
@@ -2025,13 +2223,15 @@ function openOSSDesatualizarModal(){
 function confirmOSSDesatualizar(){
   const selected=[...document.querySelectorAll('#oss-desat-funcs input:checked')].map(i=>i.value);
   if(!selected.length){toast('Selecione pelo menos uma função','e');return;}
+  if(!S.oss)S.oss=[];if(!S.ossHistorico)S.ossHistorico=[];
   let count=0;
   (S.colaboradores||[]).forEach(c=>{
     if(!selected.includes(c.funcao))return;
-    if(!S.oss)S.oss=[];
     const idx=(S.oss||[]).findIndex(o=>o.colabId===c.id);
-    const rec={id:'oss'+Date.now()+c.id,colabId:c.id,descricao:(S.oss||[])[idx]?.descricao||'',dataEntrega:'',entregue:false,desatualizada:true};
-    if(idx>=0)S.oss[idx]=rec;else S.oss.push(rec);count++;
+    const rec={id:'oss'+Date.now()+c.id,colabId:c.id,dataAtualizacao:nowDt(),dataEntrega:'',entregue:false,desatualizada:true,obs:'Marcada como desatualizada em lote'};
+    if(idx>=0)S.oss[idx]=rec;else S.oss.push(rec);
+    S.ossHistorico.push({id:'osh'+Date.now()+c.id,colabId:c.id,dataEntrega:'',dataAtualizacao:nowDt(),status:'desatualizada',obs:'Marcada em lote',registradoPor:S_cu?.id,dt:nowDt()});
+    count++;
   });
   closeModal();renderOSS();scheduleAutoSave();toast(`${count} OS marcadas como desatualizadas`,'i');
 }
@@ -2040,29 +2240,32 @@ function openOSSModal(){
   const funcs=[...new Set((S.colaboradores||[]).map(c=>c.funcao).filter(Boolean))].sort();
   showModal(`<div class="modal-hdr"><div class="modal-ttl">Nova OS em Lote</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
-    <div class="fg"><label class="flbl">Descrição da OS *</label><input class="finput" id="oss-bulk-desc" placeholder="Ex: OS Nº 001/2025 — NR-01"></div>
+    <div class="fg"><label class="flbl">Data de Atualização da OS *</label><input class="finput" type="date" id="oss-bulk-atu" value="${nowDt()}"></div>
     <div class="fg"><label class="flbl">Aplicar para Funções</label>
-      <div class="cb-g" id="oss-bulk-funcs">${funcs.map(f=>`<label class="cb-item"><input type="checkbox" value="${f}"> ${f}</label>`).join('')}</div>
+      <div class="cb-g" id="oss-bulk-funcs" style="max-height:280px;overflow-y:auto">${funcs.map(f=>`<label class="cb-item"><input type="checkbox" value="${f}"> ${f}</label>`).join('')}</div>
     </div>
-    <div class="fg"><label class="flbl"><input type="checkbox" id="oss-bulk-all" style="accent-color:var(--accent)"> Aplicar para TODOS os colaboradores ativos</label></div>
+    <div class="fg" style="margin-top:6px"><label class="cb-item"><input type="checkbox" id="oss-bulk-all" style="accent-color:var(--accent)"> <strong>Aplicar para TODOS os colaboradores ativos</strong></label></div>
   </div>
-  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveOSSBulk()">💾 Criar OS</button></div>`);
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveOSSBulk()">💾 Criar OS</button></div>`,true);
 }
 
 function saveOSSBulk(){
-  const desc=document.getElementById('oss-bulk-desc').value.trim();if(!desc){toast('Descrição obrigatória','e');return;}
+  const dataAtu=document.getElementById('oss-bulk-atu').value;if(!dataAtu){toast('Data obrigatória','e');return;}
   const all=document.getElementById('oss-bulk-all')?.checked;
   const selected=all?null:[...document.querySelectorAll('#oss-bulk-funcs input:checked')].map(i=>i.value);
   if(!all&&!selected.length){toast('Selecione funções ou marque "Todos"','e');return;}
+  if(!S.oss)S.oss=[];if(!S.ossHistorico)S.ossHistorico=[];
   let count=0;
   (S.colaboradores||[]).filter(c=>c.status==='ativo'&&(all||selected.includes(c.funcao))).forEach(c=>{
-    if(!S.oss)S.oss=[];
     const idx=(S.oss||[]).findIndex(o=>o.colabId===c.id);
-    const rec={id:'oss'+Date.now()+c.id,colabId:c.id,descricao:desc,dataEntrega:'',entregue:false,desatualizada:false};
-    if(idx>=0)S.oss[idx]=rec;else S.oss.push(rec);count++;
+    const rec={id:'oss'+Date.now()+c.id,colabId:c.id,dataAtualizacao:dataAtu,dataEntrega:'',entregue:false,desatualizada:false,obs:''};
+    if(idx>=0)S.oss[idx]=rec;else S.oss.push(rec);
+    S.ossHistorico.push({id:'osh'+Date.now()+c.id,colabId:c.id,dataEntrega:'',dataAtualizacao:dataAtu,status:'pendente',obs:'Criada em lote',registradoPor:S_cu?.id,dt:nowDt()});
+    count++;
   });
   closeModal();renderOSS();scheduleAutoSave();toast(`OS criada para ${count} colaboradores!`,'s');
 }
+
 
 // ============ INSPEÇÕES ============
 function renderInspecoes(){
@@ -2324,12 +2527,11 @@ function renderExtintores(){
 
 function openExtModal(eid){
   const e=eid?(S.extintores||[]).find(x=>x.id===eid):null;
-  const tipos=['Água 10L','Pó (ABC) 4Kg','Pó (ABC) 6Kg','Pó (ABC) 12Kg','CO2 2Kg','CO2 4Kg','Espuma 9L','Outro'];
   showModal(`<div class="modal-hdr"><div class="modal-ttl">${e?'Editar':'Novo'} Extintor</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
     <div class="fgrid">
       <div class="fg"><label class="flbl">Número/ID *</label><input class="finput" id="ex-num" value="${e?.numero||''}"></div>
-      <div class="fg"><label class="flbl">Tipo</label><select class="fsel" id="ex-tipo">${tipos.map(t=>`<option ${e?.tipo===t?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="fg"><label class="flbl">Tipo</label><input class="finput" id="ex-tipo" value="${e?.tipo||''}" placeholder="Ex: Pó ABC 6Kg, CO2 4Kg..."></div>
     </div>
     <div class="fg"><label class="flbl">Local</label><input class="finput" id="ex-local" value="${e?.local||''}"></div>
     <div class="fgrid">
