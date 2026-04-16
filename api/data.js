@@ -1,21 +1,22 @@
 // api/data.js — CommonJS (Vercel Serverless Function)
-// Lê dados do Upstash Redis.
-// Reconstrói colaboradores a partir dos chunks salvos separadamente.
+const https = require('https');
+const url_module = require('url');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const url   = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
+  const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
+  const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!REDIS_URL || !REDIS_TOKEN) {
     return res.status(500).json({ error: 'Redis not configured' });
   }
 
   try {
     // 1. Carrega payload principal
-    const mainResult = await upstashGet(url, token, 'sst:data');
+    const mainResult = await redisGet(REDIS_URL, REDIS_TOKEN, 'sst:data');
     if (mainResult === null) {
       return res.status(200).json({ _empty: true });
     }
@@ -24,21 +25,19 @@ module.exports = async function handler(req, res) {
     try { main = JSON.parse(mainResult); }
     catch (e) { return res.status(200).json({ _empty: true }); }
 
-    // 2. Carrega metadados dos chunks de colaboradores
-    let colaboradores = main.colaboradores || []; // fallback legado
+    // 2. Tenta carregar chunks de colaboradores
+    let colaboradores = main.colaboradores || [];
     delete main.colaboradores;
 
-    const metaResult = await upstashGet(url, token, 'sst:colabs:meta');
+    const metaResult = await redisGet(REDIS_URL, REDIS_TOKEN, 'sst:colabs:meta');
     if (metaResult) {
       try {
         const meta = JSON.parse(metaResult);
         const chunk_total = meta.chunk_total || 0;
-
         if (chunk_total > 0) {
-          // Carrega todos os chunks em paralelo
           const chunkValues = await Promise.all(
             Array.from({ length: chunk_total }, (_, i) =>
-              upstashGet(url, token, `sst:colabs:chunk:${i}`)
+              redisGet(REDIS_URL, REDIS_TOKEN, `sst:colabs:chunk:${i}`)
             )
           );
           colaboradores = chunkValues.flatMap(v => {
@@ -60,17 +59,43 @@ module.exports = async function handler(req, res) {
   }
 };
 
-async function upstashGet(url, token, key) {
-  const r = await fetch(url, {
-    method:  'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(['GET', key]),
+function redisGet(redisUrl, token, key) {
+  return new Promise((resolve, reject) => {
+    const parsed = url_module.parse(redisUrl);
+    const bodyData = JSON.stringify(['GET', key]);
+
+    const options = {
+      hostname: parsed.hostname,
+      port: 443,
+      path: parsed.path || '/',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(bodyData),
+      },
+    };
+
+    const req = https.request(options, (resp) => {
+      let data = '';
+      resp.on('data', chunk => data += chunk);
+      resp.on('end', () => {
+        if (resp.statusCode >= 200 && resp.statusCode < 300) {
+          try {
+            const json = JSON.parse(data);
+            // Upstash retorna { result: "valor" } ou { result: null }
+            resolve(json.result !== undefined ? json.result : null);
+          } catch {
+            resolve(null);
+          }
+        } else {
+          reject(new Error(`Redis GET failed (${resp.statusCode}): ${data}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(bodyData);
+    req.end();
   });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => String(r.status));
-    throw new Error(`Upstash GET failed (${r.status}): ${txt}`);
-  }
-  const json = await r.json();
-  // Upstash retorna { result: "valor" } ou { result: null }
-  return json.result !== undefined ? json.result : null;
 }
