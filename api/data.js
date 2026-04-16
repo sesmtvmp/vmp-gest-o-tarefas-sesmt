@@ -7,11 +7,14 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
-  const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Vercel KV usa KV_REST_API_URL e KV_REST_API_TOKEN
+  const REDIS_URL   = process.env.KV_REST_API_URL
+                   || process.env.UPSTASH_REDIS_REST_URL;
+  const REDIS_TOKEN = process.env.KV_REST_API_TOKEN
+                   || process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!REDIS_URL || !REDIS_TOKEN) {
-    return res.status(500).json({ error: 'Redis not configured' });
+    return res.status(500).json({ error: 'Redis not configured — KV_REST_API_URL/TOKEN not found' });
   }
 
   try {
@@ -83,7 +86,6 @@ function redisGet(redisUrl, token, key) {
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
           try {
             const json = JSON.parse(data);
-            // Upstash retorna { result: "valor" } ou { result: null }
             resolve(json.result !== undefined ? json.result : null);
           } catch {
             resolve(null);
