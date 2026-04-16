@@ -1060,21 +1060,22 @@ function populateFilters(){
   ['fi-unit','li-unit','ci-unit','dash-unit','trein-unit-f','oss-unit-f','colab-unit-f','rel-unit'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
     const prev=el.value;
-    // Admins veem "Todas as unidades"; usuários comuns veem apenas as suas
     if(isAdm){
       el.innerHTML='<option value="">Todas as unidades</option>';
     } else {
-      // Se tem só 1 unidade, não faz sentido mostrar "Todas"
       el.innerHTML=visibleUnits.length===1
         ?`<option value="${visibleUnits[0]}">${visibleUnits[0]}</option>`
         :'<option value="">Minhas unidades</option>';
     }
     visibleUnits.forEach(u=>{
-      if(isAdm||visibleUnits.length>1) // evita duplicar quando só tem 1
+      if(isAdm||visibleUnits.length>1)
         el.innerHTML+=`<option value="${u}">${u}</option>`;
     });
-    // Restaura seleção anterior se ainda válida
-    if(prev&&visibleUnits.includes(prev))el.value=prev;
+    // Opção especial "Sem Unidade Definida" — apenas nos filtros de colaboradores e OS
+    if(['colab-unit-f','oss-unit-f'].includes(id)){
+      el.innerHTML+=`<option value="__sem_unidade__">⚠ Sem Unidade Definida</option>`;
+    }
+    if(prev&&(visibleUnits.includes(prev)||prev==='__sem_unidade__'))el.value=prev;
     else if(!isAdm&&visibleUnits.length===1)el.value=visibleUnits[0];
   });
 }
@@ -1796,7 +1797,9 @@ function getColabFiltered(){
         if(!nome.includes(q)&&!pront.includes(q)&&!funcao.includes(q))return false;
       }
       if(func&&c.funcao!==func)return false;
-      if(unit&&c.unidade!==unit)return false;
+      // Filtro especial: apenas colaboradores sem unidade definida
+      if(unit==='__sem_unidade__'){if(c.unidade)return false;}
+      else if(unit&&c.unidade!==unit)return false;
       if(status&&c.status!==status)return false;
       return true;
     })
@@ -2269,7 +2272,9 @@ function getOSSFiltered(){
       if(c.unidade&&!canSeeUnit(c.unidade))return false;
       if(q&&!(c.prontuario||'').toLowerCase().includes(q)&&!c.nome.toLowerCase().includes(q))return false;
       if(func&&c.funcao!==func)return false;
-      if(unit&&c.unidade!==unit)return false;
+      // Filtro especial: apenas colaboradores sem unidade definida
+      if(unit==='__sem_unidade__'){if(c.unidade)return false;}
+      else if(unit&&c.unidade!==unit)return false;
       if(sf){
         const o=ossIdx[c.id];
         if(sf==='entregue'&&!(o&&o.entregue&&!o.desatualizada))return false;
