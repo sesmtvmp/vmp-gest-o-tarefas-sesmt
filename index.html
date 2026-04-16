@@ -484,7 +484,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
             <option value="afastado">Afastado</option>
             <option value="demitido">Demitido</option>
           </select>
-          <button class="btn btn-g btn-sm" id="btn-import-colab" onclick="openImportColabModal()">📥 Importar Planilha</button>
+          <button class="btn btn-g btn-sm" id="btn-import-colab" onclick="openImportColabModal()" style="display:none">📥 Importar Planilha</button>
           <button class="btn btn-p btn-sm" onclick="openColabModal()">+ Colaborador</button>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
@@ -567,6 +567,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
             <option value="atrasado">Atrasado</option>
             <option value="concluido">Concluído</option>
           </select>
+          <button class="btn btn-sm" onclick="setView('relatorios');setTimeout(()=>gerarRelatorio('inspecoes'),100)">📈 Relatório</button>
           <button class="btn btn-p btn-sm" onclick="openInspModal()">+ Nova Inspeção</button>
         </div>
         <div id="insp-content"></div>
@@ -582,6 +583,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
             <strong style="color:var(--blue)"> Desvio</strong> = situação fora do padrão que NÃO causou dano (ex: EPI não utilizado, piso molhado sem sinalização).
             <strong style="color:var(--red)"> Incidente</strong> = evento inesperado que causou ou poderia causar dano (ex: queda quase ocorrida, colisão sem lesão).
           </div>
+          <button class="btn btn-sm" onclick="setView('relatorios');setTimeout(()=>gerarRelatorio('desvios'),100)">📈 Relatório</button>
           <button class="btn btn-p btn-sm" onclick="openDesvioModal()">+ Registrar</button>
         </div>
         <div id="desvio-content"></div>
@@ -599,44 +601,54 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
 
       <!-- =================== RELATÓRIOS =================== -->
       <div id="v-relatorios" style="display:none">
-        <div class="toolbar"><span class="toolbar-title">📈 Relatórios</span></div>
-        <div class="g2">
-          <div class="card">
-            <div class="card-head"><div class="card-title">Relatórios disponíveis</div></div>
-            <div class="card-body">
-              <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
-                <span style="font-size:12px;flex:1">Histórico de Treinamentos por colaborador</span>
-                <button class="btn btn-sm btn-p">Gerar</button>
+        <div class="toolbar">
+          <span class="toolbar-title">📈 Relatórios</span>
+          <select class="fi" id="rel-unit" style="width:160px"><option value="">Todas as unidades</option></select>
+          <input class="fi" type="date" id="rel-de" style="width:130px" title="Período — De">
+          <input class="fi" type="date" id="rel-ate" style="width:130px" title="Período — Até">
+        </div>
+        <div id="rel-content">
+          <div class="g2">
+            <div class="card">
+              <div class="card-head"><div class="card-title">📋 Treinamentos</div></div>
+              <div class="card-body">
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
+                  <span style="font-size:12px;flex:1">✅ Treinamentos Válidos — por colaborador</span>
+                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('trein_valido')">Gerar</button>
+                </div>
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
+                  <span style="font-size:12px;flex:1">⚠️ Treinamentos A Vencer (30d)</span>
+                  <button class="btn btn-sm btn-warn" onclick="gerarRelatorio('trein_avencer')">Gerar</button>
+                </div>
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0">
+                  <span style="font-size:12px;flex:1">❌ Treinamentos Vencidos</span>
+                  <button class="btn btn-sm btn-d" onclick="gerarRelatorio('trein_vencido')">Gerar</button>
+                </div>
               </div>
-              <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
-                <span style="font-size:12px;flex:1">Status de Inspeções de Segurança</span>
-                <button class="btn btn-sm btn-p">Gerar</button>
-              </div>
-              <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
-                <span style="font-size:12px;flex:1">Desvios e Incidentes — por período</span>
-                <button class="btn btn-sm btn-p">Gerar</button>
-              </div>
-              <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
-                <span style="font-size:12px;flex:1">Extintores — status geral</span>
-                <button class="btn btn-sm btn-p">Gerar</button>
-              </div>
-              <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0">
-                <span style="font-size:12px;flex:1">Ordens de Serviço — situação da unidade</span>
-                <button class="btn btn-sm btn-p">Gerar</button>
+            </div>
+            <div class="card">
+              <div class="card-head"><div class="card-title">📋 Outros Relatórios</div></div>
+              <div class="card-body">
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
+                  <span style="font-size:12px;flex:1">📋 Ordens de Serviço — situação geral</span>
+                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('oss')">Gerar</button>
+                </div>
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
+                  <span style="font-size:12px;flex:1">🔍 Inspeções de Segurança</span>
+                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('inspecoes')">Gerar</button>
+                </div>
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
+                  <span style="font-size:12px;flex:1">⚠️ Desvios e Incidentes</span>
+                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('desvios')">Gerar</button>
+                </div>
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0">
+                  <span style="font-size:12px;flex:1">🧯 Extintores e Hidrantes</span>
+                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('extintores')">Gerar</button>
+                </div>
               </div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-head"><div class="card-title">Parâmetros de geração</div></div>
-            <div class="card-body">
-              <div class="fgrid">
-                <div class="fg"><label class="flbl">Período — De</label><input class="finput" type="date" id="rel-de"></div>
-                <div class="fg"><label class="flbl">Período — Até</label><input class="finput" type="date" id="rel-ate"></div>
-              </div>
-              <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="rel-unit"><option value="">Todas</option></select></div>
-              <button class="btn btn-p" style="margin-top:8px" onclick="toast('Relatório em preparação...','i')">Gerar Relatório Selecionado</button>
-            </div>
-          </div>
+          <div id="rel-preview"></div>
         </div>
       </div>
 
@@ -940,6 +952,7 @@ function entrarNoApp(u){
     document.getElementById('btn-new-trein').style.display='inline-flex';
     document.getElementById('btn-oss-desatualizar').style.display='inline-flex';
     document.getElementById('btn-oss-novo').style.display='inline-flex';
+    document.getElementById('btn-import-colab').style.display='inline-flex';
   }
   if(u.p.manageTask||u.p.isAdmin||isRoot(u)){
     document.getElementById('btn-nt').style.display='inline-flex';
@@ -959,7 +972,7 @@ function doLogout(){
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
   document.getElementById('adm-nav').style.display='none';
-  ['btn-nt','btn-ntl','btn-new-msg','btn-new-trein','btn-oss-novo','btn-oss-desatualizar'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  ['btn-nt','btn-ntl','btn-new-msg','btn-new-trein','btn-oss-novo','btn-oss-desatualizar','btn-import-colab'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   closeModal();document.getElementById('lu').value='';document.getElementById('lp').value='';
 }
 
@@ -1626,7 +1639,7 @@ function getColabFiltered(){
 
   return (S.colaboradores||[])
     .filter(c=>{
-      // Restrição de unidade por perfil do usuário
+      // Colaboradores sem unidade aparecem para todos; com unidade só para quem tem acesso
       if(c.unidade&&!canSeeUnit(c.unidade))return false;
       if(q){
         const nome=(c.nome||'').toLowerCase();
@@ -2104,7 +2117,7 @@ function getOSSFiltered(){
   return (S.colaboradores||[])
     .filter(c=>{
       if(c.status==='demitido')return false;
-      // Restrição de unidade por perfil do usuário
+      // Colaboradores sem unidade aparecem para todos; com unidade só para quem tem acesso
       if(c.unidade&&!canSeeUnit(c.unidade))return false;
       if(q&&!(c.prontuario||'').toLowerCase().includes(q)&&!c.nome.toLowerCase().includes(q))return false;
       if(func&&c.funcao!==func)return false;
@@ -2298,7 +2311,7 @@ function saveOSSBulk(){
 function renderInspecoes(){
   const el=document.getElementById('insp-content');if(!el)return;
   const sf=document.getElementById('insp-status-f')?.value||'';
-  const insp=(S.inspecoes||[]).filter(i=>!sf||i.status===sf).sort((a,b)=>b.data.localeCompare(a.data));
+  const insp=(S.inspecoes||[]).filter(i=>(!sf||i.status===sf)&&canSeeUnit(i.unidade)).sort((a,b)=>b.data.localeCompare(a.data));
   el.innerHTML=`
   <div class="stats-grid">
     <div class="stat s-blue"><div class="stat-lbl">TOTAL</div><div class="stat-val">${(S.inspecoes||[]).length}</div></div>
@@ -2394,7 +2407,7 @@ function openInspEditModal(id){
 }
 
 function saveInsp(eid){
-  const data={setor:document.getElementById('in-setor').value.trim(),data:document.getElementById('in-data').value,obs:document.getElementById('in-obs').value.trim(),acoes:document.getElementById('in-acoes').value.trim(),relatorioEmitido:document.getElementById('in-relat').value==='1',prazo:document.getElementById('in-prazo').value,dataCiencia:document.getElementById('in-ciencia').value,meioEncaminhamento:document.getElementById('in-meio').value,status:document.getElementById('in-status').value};
+  const data={setor:document.getElementById('in-setor').value.trim(),unidade:document.getElementById('in-unit')?.value||'',data:document.getElementById('in-data').value,obs:document.getElementById('in-obs').value.trim(),acoes:document.getElementById('in-acoes').value.trim(),relatorioEmitido:document.getElementById('in-relat').value==='1',prazo:document.getElementById('in-prazo').value,dataCiencia:document.getElementById('in-ciencia').value,meioEncaminhamento:document.getElementById('in-meio').value,status:document.getElementById('in-status').value};
   if(!data.setor||!data.data){toast('Setor e data obrigatórios','e');return;}
   if(!S.inspecoes)S.inspecoes=[];
   if(eid){Object.assign((S.inspecoes||[]).find(x=>x.id===eid)||{},data);}
@@ -2410,7 +2423,7 @@ function delInsp(id){
 // ============ DESVIOS/INCIDENTES ============
 function renderDesvios(){
   const el=document.getElementById('desvio-content');if(!el)return;
-  const desvios=(S.desvios||[]).slice().sort((a,b)=>b.data.localeCompare(a.data));
+  const desvios=(S.desvios||[]).filter(d=>canSeeUnit(d.unidade)).slice().sort((a,b)=>b.data.localeCompare(a.data));
   el.innerHTML=`
   <div class="stats-grid">
     <div class="stat s-blue"><div class="stat-lbl">TOTAL</div><div class="stat-val">${desvios.length}</div></div>
@@ -2454,10 +2467,12 @@ function openDesvioModal(){
     <div class="fg"><label class="flbl">Descrição detalhada</label><textarea class="fta" id="dv-desc"></textarea></div>
     <div class="fgrid">
       <div class="fg"><label class="flbl">Setor</label><input class="finput" id="dv-setor"></div>
+      <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="dv-unit"><option value="">Selecione...</option>${(S.cfg.units||[]).map(u=>`<option value="${u}">${u}</option>`).join('')}</select></div>
+    </div>
+    <div class="fgrid">
       <div class="fg"><label class="flbl">Prioridade</label><select class="fsel" id="dv-prio">
         <option value="baixa">Baixa</option><option value="media" selected>Média</option><option value="alta">Alta</option>
       </select></div>
-    </div>
     <div class="fgrid">
       <div class="fg"><label class="flbl">Responsável pela ação</label><input class="finput" id="dv-resp"></div>
       <div class="fg"><label class="flbl">Prazo</label><input class="finput" type="date" id="dv-prazo"></div>
@@ -2500,7 +2515,7 @@ function openDesvioEditModal(id){
 function saveDesvio(eid){
   const titulo=document.getElementById('dv-titulo').value.trim();const data=document.getElementById('dv-data').value;
   if(!titulo||!data){toast('Título e data obrigatórios','e');return;}
-  const obj={tipo:document.getElementById('dv-tipo').value,data,titulo,descricao:document.getElementById('dv-desc').value.trim(),setor:document.getElementById('dv-setor').value.trim(),prioridade:document.getElementById('dv-prio').value,responsavel:document.getElementById('dv-resp').value.trim(),prazo:document.getElementById('dv-prazo').value,status:document.getElementById('dv-status')?.value||'aberto'};
+  const obj={tipo:document.getElementById('dv-tipo').value,data,titulo,descricao:document.getElementById('dv-desc').value.trim(),setor:document.getElementById('dv-setor').value.trim(),unidade:document.getElementById('dv-unit')?.value||'',prioridade:document.getElementById('dv-prio').value,responsavel:document.getElementById('dv-resp').value.trim(),prazo:document.getElementById('dv-prazo').value,status:document.getElementById('dv-status')?.value||'aberto'};
   if(!S.desvios)S.desvios=[];
   if(eid){Object.assign((S.desvios||[]).find(x=>x.id===eid)||{},obj);}else{S.desvios.push({id:'dv'+Date.now(),...obj});}
   closeModal();renderDesvios();scheduleAutoSave();toast(eid?'Atualizado!':'Registrado!','s');
@@ -2513,7 +2528,9 @@ function delDesvio(id){
 // ============ EXTINTORES/HIDRANTES ============
 function renderExtintores(){
   const el=document.getElementById('ext-content');if(!el)return;
-  const hoje=nowDt();const exts=S.extintores||[];const hids=S.hidrantes||[];
+  const hoje=nowDt();
+  const exts=(S.extintores||[]).filter(e=>canSeeUnit(e.unidade));
+  const hids=(S.hidrantes||[]).filter(h=>canSeeUnit(h.unidade));
   const extV=exts.filter(e=>!e.proxRecarga||e.proxRecarga>=hoje).length;
   const extVe=exts.filter(e=>e.proxRecarga&&e.proxRecarga<hoje).length;
   el.innerHTML=`
@@ -2527,10 +2544,10 @@ function renderExtintores(){
   <div class="g2">
     <div class="card"><div class="card-head"><div class="card-title">🧯 Extintores</div><div class="card-acts"><button class="btn btn-p btn-sm" onclick="openExtModal()">+ Extintor</button></div></div>
     <div class="no-pad"><div class="tw"><table class="dt">
-      <thead><tr><th>Nº</th><th>TIPO</th><th>LOCAL</th><th>ÚLT. RECARGA</th><th>PRÓX. RECARGA</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+      <thead><tr><th>Nº</th><th>TIPO</th><th>UNIDADE</th><th>LOCAL</th><th>ÚLT. RECARGA</th><th>PRÓX. RECARGA</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
       <tbody>${!exts.length?`<tr><td colspan="7" class="empty">Nenhum extintor.</td></tr>`:
       exts.map(e=>{const ve=e.proxRecarga&&e.proxRecarga<hoje;const av=!ve&&e.proxRecarga&&diffDays(hoje,e.proxRecarga)<=30;
-        return `<tr><td class="mono">#${e.numero||'—'}</td><td>${e.tipo||'—'}</td><td>${e.local||'—'}</td>
+        return `<tr><td class="mono">#${e.numero||'—'}</td><td>${e.tipo||'—'}</td><td style="font-size:11px">${e.unidade||'—'}</td><td>${e.local||'—'}</td>
           <td class="mono" style="font-size:11px">${fmtDt(e.ultRecarga)||'—'}</td>
           <td class="mono" style="font-size:11px">${fmtDt(e.proxRecarga)||'—'}</td>
           <td><span class="badge ${ve?'b-red':av?'b-amber':'b-green'}">${ve?'Vencido':av?'A Vencer':'Válido'}</span></td>
@@ -2560,7 +2577,10 @@ function openExtModal(eid){
       <div class="fg"><label class="flbl">Número/ID *</label><input class="finput" id="ex-num" value="${e?.numero||''}"></div>
       <div class="fg"><label class="flbl">Tipo</label><input class="finput" id="ex-tipo" value="${e?.tipo||''}" placeholder="Ex: Pó ABC 6Kg, CO2 4Kg..."></div>
     </div>
-    <div class="fg"><label class="flbl">Local</label><input class="finput" id="ex-local" value="${e?.local||''}"></div>
+    <div class="fgrid">
+      <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="ex-unit">${(S.cfg.units||[]).map(u=>`<option value="${u}" ${(e?.unidade||'')=== u?'selected':''}>${u}</option>`).join('')}<option value="" ${!e?.unidade?'selected':''}>Não definida</option></select></div>
+      <div class="fg"><label class="flbl">Local</label><input class="finput" id="ex-local" value="${e?.local||''}"></div>
+    </div>
     <div class="fgrid">
       <div class="fg"><label class="flbl">Última Recarga</label><input class="finput" type="date" id="ex-ult" value="${e?.ultRecarga||''}"></div>
       <div class="fg"><label class="flbl">Próx. Recarga</label><input class="finput" type="date" id="ex-prox" value="${e?.proxRecarga||''}"></div>
@@ -2576,7 +2596,7 @@ function openExtModal(eid){
 
 function saveExt(eid){
   const num=document.getElementById('ex-num').value.trim();if(!num){toast('Número obrigatório','e');return;}
-  const data={numero:num,tipo:document.getElementById('ex-tipo').value,local:document.getElementById('ex-local').value.trim(),ultRecarga:document.getElementById('ex-ult').value,proxRecarga:document.getElementById('ex-prox').value,testeHidro:document.getElementById('ex-hidro').value};
+  const data={numero:num,tipo:document.getElementById('ex-tipo').value,unidade:document.getElementById('ex-unit').value,local:document.getElementById('ex-local').value.trim(),ultRecarga:document.getElementById('ex-ult').value,proxRecarga:document.getElementById('ex-prox').value,testeHidro:document.getElementById('ex-hidro').value};
   if(!S.extintores)S.extintores=[];
   if(eid){Object.assign((S.extintores||[]).find(x=>x.id===eid)||{},data);}else{S.extintores.push({id:'ext'+Date.now(),...data});}
   closeModal();renderExtintores();scheduleAutoSave();toast(eid?'Atualizado!':'Cadastrado!','s');
@@ -2590,8 +2610,10 @@ function openHidModal(eid){
   <div class="modal-body">
     <div class="fgrid">
       <div class="fg"><label class="flbl">Número/ID *</label><input class="finput" id="hd-num" value="${h?.numero||''}"></div>
-      <div class="fg"><label class="flbl">Local</label><input class="finput" id="hd-local" value="${h?.local||''}"></div>
+      <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="hd-unit">${(S.cfg.units||[]).map(u=>`<option value="${u}" ${(h?.unidade||'')=== u?'selected':''}>${u}</option>`).join('')}<option value="" ${!h?.unidade?'selected':''}>Não definida</option></select></div>
     </div>
+    <div class="fgrid">
+      <div class="fg"><label class="flbl">Local</label><input class="finput" id="hd-local" value="${h?.local||''}"></div>
     <div class="fgrid">
       <div class="fg"><label class="flbl">Última Inspeção</label><input class="finput" type="date" id="hd-ult" value="${h?.ultInspecao||''}"></div>
       <div class="fg"><label class="flbl">Próx. Inspeção</label><input class="finput" type="date" id="hd-prox" value="${h?.proxInspecao||''}"></div>
@@ -2607,7 +2629,7 @@ function openHidModal(eid){
 
 function saveHid(eid){
   const num=document.getElementById('hd-num').value.trim();if(!num){toast('Número obrigatório','e');return;}
-  const data={numero:num,local:document.getElementById('hd-local').value.trim(),ultInspecao:document.getElementById('hd-ult').value,proxInspecao:document.getElementById('hd-prox').value,obs:document.getElementById('hd-obs').value.trim()};
+  const data={numero:num,unidade:document.getElementById('hd-unit').value,local:document.getElementById('hd-local').value.trim(),ultInspecao:document.getElementById('hd-ult').value,proxInspecao:document.getElementById('hd-prox').value,obs:document.getElementById('hd-obs').value.trim()};
   if(!S.hidrantes)S.hidrantes=[];
   if(eid){Object.assign((S.hidrantes||[]).find(x=>x.id===eid)||{},data);}else{S.hidrantes.push({id:'hid'+Date.now(),...data});}
   closeModal();renderExtintores();scheduleAutoSave();toast(eid?'Atualizado!':'Cadastrado!','s');
@@ -2760,6 +2782,142 @@ function saveSettings(){
   S.cfg.ftr=document.getElementById('c-ftr').value;S.cfg.ver=document.getElementById('c-ver').value;
   S.cfg.email=document.getElementById('c-email').value;
   applySettings();saveToKV();toast('Configurações salvas!','s');
+}
+
+
+// ============ RELATÓRIOS ============
+function gerarRelatorio(tipo){
+  const unit=document.getElementById('rel-unit')?.value||'';
+  const de=document.getElementById('rel-de')?.value||'';
+  const ate=document.getElementById('rel-ate')?.value||'';
+  const prev=document.getElementById('rel-preview');
+  if(!prev)return;
+
+  const hoje=nowDt();
+  const dtFmt=s=>s?fmtDt(s):'—';
+  const filtPer=(d)=>{if(de&&d<de)return false;if(ate&&d>ate)return false;return true;};
+  const filtUnit=(u)=>!unit||u===unit||!u;
+
+  let html='';
+  const titulo={trein_valido:'✅ Treinamentos Válidos',trein_avencer:'⚠️ Treinamentos A Vencer (30d)',trein_vencido:'❌ Treinamentos Vencidos',oss:'📋 Ordens de Serviço',inspecoes:'🔍 Inspeções de Segurança',desvios:'⚠️ Desvios e Incidentes',extintores:'🧯 Extintores e Hidrantes'}[tipo]||tipo;
+  const dataGer=new Date().toLocaleString('pt-BR');
+  const headerHtml=`<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--border)">
+    <div style="font-size:16px;font-weight:600">${titulo}</div>
+    <div style="font-size:11px;color:var(--text3)">Gerado em ${dataGer}${unit?' · Unidade: '+unit:' · Todas as unidades'}${de||ate?' · Período: '+(de?dtFmt(de):'início')+' → '+(ate?dtFmt(ate):'hoje'):''}
+    </div></div>`;
+
+  if(tipo==='trein_valido'||tipo==='trein_avencer'||tipo==='trein_vencido'){
+    const statusAlvo=tipo==='trein_valido'?'valido':tipo==='trein_avencer'?'a_vencer':'vencido';
+    const treinamentos=S.treinamentos||[];
+    const colabs=(S.colaboradores||[]).filter(c=>c.status==='ativo'&&filtUnit(c.unidade));
+    const rows=[];
+    colabs.forEach(colab=>{
+      treinamentos.forEach(tr=>{
+        const st=getTreinStatus(tr.id,colab.id);
+        if(st.status!==statusAlvo)return;
+        rows.push({colab,tr,st});
+      });
+    });
+    rows.sort((a,b)=>{const pa=parseInt(a.colab.prontuario)||Infinity,pb=parseInt(b.colab.prontuario)||Infinity;return pa-pb;});
+    html=headerHtml+`<div class="card"><div class="card-head"><div class="card-title">${rows.length} registro(s)</div>
+      <button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button></div>
+      <div class="no-pad"><div class="tw"><table class="dt">
+        <thead><tr><th>PRONTUÁRIO</th><th>COLABORADOR</th><th>UNIDADE</th><th>FUNÇÃO</th><th>TREINAMENTO</th><th>VALIDADE</th><th>STATUS</th></tr></thead>
+        <tbody>${rows.length?rows.map(({colab,tr,st})=>`<tr>
+          <td class="mono">${colab.prontuario||'—'}</td>
+          <td class="td-main">${colab.nome}</td>
+          <td>${colab.unidade||'—'}</td>
+          <td>${colab.funcao||'—'}</td>
+          <td>${tr.codigo} — ${tr.nome}</td>
+          <td class="mono" style="font-size:11px">${dtFmt(st.validade)}</td>
+          <td><span class="badge ${st.badge}">${st.label}</span></td>
+        </tr>`).join(''):'<tr><td colspan="7" class="empty">Nenhum resultado.</td></tr>'}</tbody>
+      </table></div></div></div>`;
+  }
+  else if(tipo==='oss'){
+    const colabs=(S.colaboradores||[]).filter(c=>c.status!=='demitido'&&filtUnit(c.unidade));
+    const ossIdx=buildOSSIndex();
+    html=headerHtml+`<div class="card"><div class="card-head"><div class="card-title">${colabs.length} colaborador(es)</div>
+      <button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button></div>
+      <div class="no-pad"><div class="tw"><table class="dt">
+        <thead><tr><th>PRONTUÁRIO</th><th>COLABORADOR</th><th>FUNÇÃO</th><th>UNIDADE</th><th>STATUS OS</th><th>ATUALIZ.</th><th>ENTREGA</th></tr></thead>
+        <tbody>${colabs.map(c=>{const o=ossIdx[c.id];const st=o?o.desatualizada?'Desatualizada':o.entregue?'Entregue':'Pendente':'Sem OS';const bg=o?o.desatualizada?'b-amber':o.entregue?'b-green':'b-amber':'b-gray';
+          return `<tr><td class="mono">${c.prontuario||'—'}</td><td class="td-main">${c.nome}</td><td>${c.funcao||'—'}</td><td>${c.unidade||'—'}</td>
+          <td><span class="badge ${bg}">${st}</span></td><td class="mono" style="font-size:11px">${dtFmt(o?.dataAtualizacao)}</td><td class="mono" style="font-size:11px">${dtFmt(o?.dataEntrega)}</td></tr>`;
+        }).join('')}</tbody>
+      </table></div></div></div>`;
+  }
+  else if(tipo==='inspecoes'){
+    const itens=(S.inspecoes||[]).filter(i=>filtUnit(i.unidade)&&(!de||i.data>=de)&&(!ate||i.data<=ate)).sort((a,b)=>b.data.localeCompare(a.data));
+    html=headerHtml+`<div class="card"><div class="card-head"><div class="card-title">${itens.length} inspeção(ões)</div>
+      <button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button></div>
+      <div class="no-pad"><div class="tw"><table class="dt">
+        <thead><tr><th>DATA</th><th>SETOR</th><th>UNIDADE</th><th>STATUS</th><th>CIÊNCIA</th><th>MEIO</th></tr></thead>
+        <tbody>${itens.length?itens.map(i=>`<tr>
+          <td class="mono" style="font-size:11px">${dtFmt(i.data)}</td><td class="td-main">${i.setor||'—'}</td><td>${i.unidade||'—'}</td>
+          <td><span class="badge ${i.status==='concluido'?'b-green':i.status==='atrasado'?'b-red':'b-amber'}">${{concluido:'Concluído',atrasado:'Atrasado',prazo:'No Prazo',pendente:'Pendente'}[i.status]||i.status}</span></td>
+          <td class="mono" style="font-size:11px">${dtFmt(i.dataCiencia)||'—'}</td><td style="font-size:11px">${i.meioEncaminhamento||'—'}</td>
+        </tr>`).join(''):'<tr><td colspan="6" class="empty">Nenhuma inspeção.</td></tr>'}</tbody>
+      </table></div></div></div>`;
+  }
+  else if(tipo==='desvios'){
+    const itens=(S.desvios||[]).filter(d=>filtUnit(d.unidade)&&(!de||d.data>=de)&&(!ate||d.data<=ate)).sort((a,b)=>b.data.localeCompare(a.data));
+    html=headerHtml+`<div class="card"><div class="card-head"><div class="card-title">${itens.length} desvio(s)/incidente(s)</div>
+      <button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button></div>
+      <div class="no-pad"><div class="tw"><table class="dt">
+        <thead><tr><th>DATA</th><th>TIPO</th><th>TÍTULO</th><th>SETOR</th><th>UNIDADE</th><th>PRIORIDADE</th><th>STATUS</th><th>RESPONSÁVEL</th></tr></thead>
+        <tbody>${itens.length?itens.map(d=>`<tr>
+          <td class="mono" style="font-size:11px">${dtFmt(d.data)}</td>
+          <td><span class="badge ${d.tipo==='incidente'?'b-red':'b-amber'}">${d.tipo==='incidente'?'Incidente':'Desvio'}</span></td>
+          <td class="td-main">${d.titulo||'—'}</td><td>${d.setor||'—'}</td><td>${d.unidade||'—'}</td>
+          <td><span class="badge ${d.prioridade==='alta'?'b-red':d.prioridade==='media'?'b-amber':'b-green'}">${d.prioridade||'—'}</span></td>
+          <td><span class="badge ${d.status==='concluido'?'b-green':d.status==='atrasado'?'b-red':'b-amber'}">${{concluido:'Concluído',atrasado:'Atrasado',aberto:'Em Aberto'}[d.status]||'Em Aberto'}</span></td>
+          <td style="font-size:11px">${d.responsavel||'—'}</td>
+        </tr>`).join(''):'<tr><td colspan="8" class="empty">Nenhum desvio.</td></tr>'}</tbody>
+      </table></div></div></div>`;
+  }
+  else if(tipo==='extintores'){
+    const exts=(S.extintores||[]).filter(e=>filtUnit(e.unidade));
+    const hids=(S.hidrantes||[]).filter(h=>filtUnit(h.unidade));
+    html=headerHtml+`<div class="card"><div class="card-head"><div class="card-title">Extintores (${exts.length})</div>
+      <button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button></div>
+      <div class="no-pad"><div class="tw"><table class="dt">
+        <thead><tr><th>Nº</th><th>TIPO</th><th>UNIDADE</th><th>LOCAL</th><th>ÚLT. RECARGA</th><th>PRÓX. RECARGA</th><th>STATUS</th></tr></thead>
+        <tbody>${exts.length?exts.map(e=>{const ve=e.proxRecarga&&e.proxRecarga<hoje;return `<tr>
+          <td class="mono">#${e.numero||'—'}</td><td>${e.tipo||'—'}</td><td>${e.unidade||'—'}</td><td>${e.local||'—'}</td>
+          <td class="mono" style="font-size:11px">${dtFmt(e.ultRecarga)}</td><td class="mono" style="font-size:11px">${dtFmt(e.proxRecarga)}</td>
+          <td><span class="badge ${ve?'b-red':'b-green'}">${ve?'Vencido':'Válido'}</span></td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">Nenhum.</td></tr>'}</tbody>
+      </table></div></div></div>
+      <div class="card" style="margin-top:14px"><div class="card-head"><div class="card-title">Hidrantes (${hids.length})</div></div>
+      <div class="no-pad"><div class="tw"><table class="dt">
+        <thead><tr><th>Nº</th><th>UNIDADE</th><th>LOCAL</th><th>ÚLT. INSPEÇÃO</th><th>PRÓX. INSPEÇÃO</th><th>STATUS</th></tr></thead>
+        <tbody>${hids.length?hids.map(h=>{const ve=h.proxInspecao&&h.proxInspecao<hoje;return `<tr>
+          <td class="mono">#${h.numero||'—'}</td><td>${h.unidade||'—'}</td><td>${h.local||'—'}</td>
+          <td class="mono" style="font-size:11px">${dtFmt(h.ultInspecao)}</td><td class="mono" style="font-size:11px">${dtFmt(h.proxInspecao)}</td>
+          <td><span class="badge ${ve?'b-red':'b-green'}">${ve?'Vencido':'Válido'}</span></td></tr>`;}).join(''):'<tr><td colspan="6" class="empty">Nenhum.</td></tr>'}</tbody>
+      </table></div></div></div>`;
+  }
+
+  prev.innerHTML=html;
+  prev.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function imprimirRelatorio(){
+  const prev=document.getElementById('rel-preview');
+  if(!prev||!prev.innerHTML)return;
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório SST</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;color:#000;background:#fff;padding:20px}
+  table{width:100%;border-collapse:collapse;margin-bottom:16px}
+  th{background:#f0f0f0;border:1px solid #ccc;padding:6px 8px;font-size:11px;text-align:left}
+  td{border:1px solid #ddd;padding:5px 8px;font-size:11px}
+  .badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600}
+  h3{margin:16px 0 8px}
+  @media print{button{display:none!important}}</style></head><body>`);
+  w.document.write(prev.innerHTML);
+  w.document.write('</body></html>');
+  w.document.close();
+  setTimeout(()=>w.print(),400);
 }
 
 // ============ MODAL / TOAST ============
