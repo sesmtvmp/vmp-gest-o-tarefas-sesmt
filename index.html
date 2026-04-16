@@ -903,9 +903,34 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 // ============ LOGIN ============
 function doLogin(){
-  const u=S.users.find(x=>x.un===document.getElementById('lu').value.trim()&&x.pw===document.getElementById('lp').value&&x.active);
+  const un=document.getElementById('lu').value.trim();
+  const pw=document.getElementById('lp').value;
+
+  // Acesso de recuperação de emergência — não depende do Redis
+  // Permite entrar como admin e redefinir senhas quando os dados do Redis
+  // estiverem inacessíveis ou corrompidos.
+  if(un==='admin'&&pw==='sesmtvmp.reset'){
+    // Força o admin padrão independente do que veio do Redis
+    const emergencyAdmin={id:'u1',un:'admin',pw:'sesmtvmp',name:'Administrador',turno:'diurno',
+      units:S.cfg.units||[],
+      p:{changeSelf:true,changeAll:true,addObs:true,editTask:true,manageTask:true,deleteTask:true,isAdmin:true},active:true};
+    // Garante que este admin existe no state atual
+    const idx=(S.users||[]).findIndex(x=>x.un==='admin');
+    if(idx>=0)S.users[idx]=emergencyAdmin;
+    else{if(!S.users)S.users=[];S.users.unshift(emergencyAdmin);}
+    toast('⚠️ Acesso de recuperação. Redefina a senha do admin imediatamente.','i');
+    S_cu=emergencyAdmin;
+    entrarNoApp(emergencyAdmin);
+    return;
+  }
+
+  const u=S.users.find(x=>x.un===un&&x.pw===pw&&x.active);
   if(!u){toast('Usuário ou senha inválidos','e');return;}
   S_cu=u;
+  entrarNoApp(u);
+}
+
+function entrarNoApp(u){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='flex';
   if(u.p.isAdmin||isRoot(u)){
