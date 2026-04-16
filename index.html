@@ -1530,13 +1530,16 @@ function saveTask(eid,defaultCol){
   const checked=[...document.querySelectorAll('.rep-user-chk:checked')];
   if(!checked.length){toast('Selecione pelo menos um responsável','e');return;}
 
-  // Valida que todos os selecionados têm unidade escolhida
+  // Valida que todos os selecionados têm unidade escolhida (exceto quem marcou "todas")
   let invalid=false;
   checked.forEach(chk=>{
-    const sel=document.querySelector(`.rep-unit-sel[data-uid="${chk.value}"]`);
+    const uid=chk.value;
+    const allChk=document.querySelector(`.rep-allunits-chk[data-uid="${uid}"]`);
+    if(allChk&&allChk.checked)return; // "todas as unidades" — não precisa validar select
+    const sel=document.querySelector(`.rep-unit-sel[data-uid="${uid}"]`);
     if(!sel||!sel.value){
-      const u=S.users.find(x=>x.id===chk.value);
-      toast(`Selecione a unidade de ${u?.name||'usuário'}','e`);
+      const u=S.users.find(x=>x.id===uid);
+      toast(`Selecione a unidade de ${u?.name||'usuário'}`, 'e');
       invalid=true;
     }
   });
@@ -1717,8 +1720,14 @@ function saveAviso(){
 // ============ MESSAGES ============
 function updateMsgBadge(){
   const isAdm=isRoot(S_cu)||S_cu?.p?.isAdmin;
-  const unread=isAdm?(S.messages||[]).filter(m=>!m.replied).length:(S.messages||[]).filter(m=>m.uid===S_cu?.id&&m.replied&&!m.readByUser).length;
-  const el=document.getElementById('sc-msgs');if(el)el.textContent=unread;
+  let unread;
+  if(isAdm){
+    unread=(S.messages||[]).filter(m=>!m.replied&&!m.arquivada).length;
+  } else {
+    // Usuário só conta mensagens não arquivadas e com resposta não lida
+    unread=(S.messages||[]).filter(m=>m.uid===S_cu?.id&&!m.arquivada&&m.replied&&!m.readByUser).length;
+  }
+  const el=document.getElementById('sc-msgs');if(el)el.textContent=unread||'';
 }
 let _msgTab='ativas'; // 'ativas' | 'arquivadas'
 
@@ -1921,6 +1930,33 @@ function renderDashboard(){
 function goToTreinFilter(status){_dashTreinFilter=status;setView('treinamentos');}
 
 // ============ COLABORADORES ============
+
+// ============ TABELAS DE IMPORTAÇÃO ============
+const SITUACAO_STATUS = {
+  1:'ativo', 2:'ativo', 3:'afastado', 4:'afastado', 5:'afastado',
+  6:'afastado', 7:'ativo', 8:'ativo', 9:'afastado', 10:'ativo',
+  11:'ativo', 12:'ativo', 14:'ativo', 15:'ativo', 16:'demitido',
+  17:'demitido', 18:'ativo', 19:'afastado', 20:'afastado', 21:'afastado',
+  22:'afastado', 23:'afastado', 24:'ativo', 25:'ativo', 26:'ativo',
+  27:'ativo', 28:'afastado', 29:'ativo', 30:'ativo', 31:'ativo',
+  32:'ativo', 35:'ativo', 36:'ativo', 37:'ativo', 38:'ativo',
+  39:'ativo', 40:'afastado', 41:'ativo', 42:'afastado', 43:'afastado',
+  44:'afastado', 45:'ativo', 46:'ativo', 47:'ativo', 48:'ativo', 52:'ativo'
+};
+
+// Descrição das situações para exibição
+const SITUACAO_LABEL = {
+  1:'Ativo',2:'DRS (Folga Paga)',3:'Seguro',4:'Atestado',5:'Aux. Maternidade',
+  6:'INSS',7:'Falta Justificada',8:'Folga Compensada',9:'Férias',
+  10:'Falta Não Justificada',11:'Dia Abonado',16:'DSN (Dispensado)',
+  17:'Rescisão Indireta',19:'Aposentado Afastado',28:'Aposentado por Invalidez'
+};
+
+const OPERA_UNIDADE = {
+  30:'Iguatemi', 50:'Pinedo', 51:'M.Boi Mirim',
+  52:'Itaim', 54:'A.E.Carvalho', 55:'Imperador', 58:'Brás'
+};
+
 // ============ COLABORADORES — paginação ============
 let _colabPage=0;
 let _colabFiltered=[];
@@ -2148,25 +2184,57 @@ function previewColabImport(){
       if(lines.length<2){toast('Arquivo vazio ou inválido','e');return;}
       const sep=lines[0].includes(';')?';':lines[0].includes('\t')?'\t':',';
       const header=lines[0].split(sep).map(h=>h.trim().replace(/"/g,'').toLowerCase());
-      const idxPront=header.findIndex(h=>/pront|regist|matr|id/.test(h));
-      const idxNome=header.findIndex(h=>/nome/.test(h));
+      const idxPront=header.findIndex(h=>/pront|regist|matr/.test(h));
+      const idxNome=header.findIndex(h=>/\bnome\b/.test(h));
       const idxFunc=header.findIndex(h=>/fun|cargo/.test(h));
-      const idxAdm=header.findIndex(h=>/adm|data/.test(h));
+      const idxAdm=header.findIndex(h=>/adm|admiss/.test(h));
+      const idxSit=header.findIndex(h=>/situa|situ/.test(h));
+      const idxOpera=header.findIndex(h=>/opera/.test(h));
       if(idxNome<0){document.getElementById('import-preview').innerHTML='<div class="alert alert-danger">Coluna "Nome" não encontrada. Verifique o arquivo.</div>';return;}
       _importPreview=[];
       for(let i=1;i<lines.length;i++){
-        const cols=lines[i].split(sep).map(c=>c.trim().replace(/"/g,''));
+        const cols=lines[i].split(sep).map(col=>col.trim().replace(/"/g,''));
         if(!cols[idxNome])continue;
-        _importPreview.push({prontuario:idxPront>=0?cols[idxPront]:'',nome:cols[idxNome]||'',funcao:idxFunc>=0?cols[idxFunc]:'',admissao:idxAdm>=0?normalizeDate(cols[idxAdm]):''});
+        const sitNum=idxSit>=0?parseInt(cols[idxSit])||null:null;
+        const operaNum=idxOpera>=0?parseInt(cols[idxOpera])||null:null;
+        const statusDeriv=sitNum!=null?(SITUACAO_STATUS[sitNum]||null):null;
+        const unidadeDeriv=operaNum!=null?(OPERA_UNIDADE[operaNum]||null):null;
+        _importPreview.push({
+          prontuario:idxPront>=0?cols[idxPront]:'',
+          nome:cols[idxNome]||'',
+          funcao:idxFunc>=0?cols[idxFunc]:'',
+          admissao:idxAdm>=0?normalizeDate(cols[idxAdm]):'',
+          situacao:sitNum,
+          opera:operaNum,
+          statusDeriv,
+          unidadeDeriv
+        });
       }
+      const hasSit=idxSit>=0,hasOpera=idxOpera>=0;
       const prev=document.getElementById('import-preview');
-      prev.innerHTML=`<div class="alert alert-ok">✅ ${_importPreview.length} colaboradores encontrados</div>
-      <div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r)">
-      <table class="dt"><thead><tr><th>PRONTUÁRIO</th><th>NOME</th><th>FUNÇÃO</th><th>ADMISSÃO</th></tr></thead>
-      <tbody>${_importPreview.slice(0,8).map(r=>`<tr><td class="mono">${r.prontuario}</td><td>${r.nome}</td><td>${r.funcao}</td><td class="mono">${fmtDt(r.admissao)||r.admissao}</td></tr>`).join('')}
-      ${_importPreview.length>8?`<tr><td colspan="4" style="text-align:center;color:var(--text3);font-size:11px">...e mais ${_importPreview.length-8}</td></tr>`:''}</tbody></table></div>`;
+      const novos=_importPreview.filter(r=>!(S.colaboradores||[]).find(c=>c.prontuario&&r.prontuario&&c.prontuario===r.prontuario)).length;
+      const atualizados=_importPreview.length-novos;
+      const demitidos=(S.colaboradores||[]).filter(c=>c.status!=='demitido'&&c.prontuario&&!_importPreview.find(r=>r.prontuario&&r.prontuario===c.prontuario)).length;
+      prev.innerHTML=`<div class="alert alert-ok">
+        ✅ <strong>${_importPreview.length}</strong> na planilha &nbsp;·&nbsp;
+        🆕 <strong>${novos}</strong> novos &nbsp;·&nbsp;
+        🔄 <strong>${atualizados}</strong> a atualizar &nbsp;·&nbsp;
+        ❌ <strong>${demitidos}</strong> serão marcados como demitidos
+        ${hasSit?'&nbsp;·&nbsp; ✅ Coluna Situação detectada':''}
+        ${hasOpera?'&nbsp;·&nbsp; ✅ Coluna Opera detectada':''}
+      </div>
+      <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r)">
+      <table class="dt"><thead><tr><th>PRONTUÁRIO</th><th>NOME</th><th>FUNÇÃO</th><th>ADMISSÃO</th>${hasSit?'<th>SITUAÇÃO</th>':''}${hasOpera?'<th>UNIDADE</th>':''}</tr></thead>
+      <tbody>${_importPreview.slice(0,10).map(r=>`<tr>
+        <td class="mono">${r.prontuario}</td><td>${r.nome}</td><td>${r.funcao}</td>
+        <td class="mono">${fmtDt(r.admissao)||r.admissao}</td>
+        ${hasSit?`<td><span class="badge ${r.statusDeriv==='ativo'?'b-green':r.statusDeriv==='afastado'?'b-amber':'b-red'}">${r.statusDeriv||'?'}</span></td>`:''}
+        ${hasOpera?`<td>${r.unidadeDeriv||'<span style="color:var(--text3)">—</span>'}</td>`:''}
+      </tr>`).join('')}
+      ${_importPreview.length>10?`<tr><td colspan="6" style="text-align:center;color:var(--text3);font-size:11px">...e mais ${_importPreview.length-10}</td></tr>`:''}</tbody></table></div>
+      <div class="alert alert-warn" style="margin-top:8px;font-size:11px">⚠️ Colaboradores ativos não encontrados na planilha serão marcados como <strong>Demitido</strong>.</div>`;
       const btn=document.getElementById('btn-confirm-import');
-      if(btn){btn.style.display='inline-flex';btn.textContent=`✅ Importar ${_importPreview.length} colaboradores`;}
+      if(btn){btn.style.display='inline-flex';btn.textContent=`✅ Confirmar importação de ${_importPreview.length} colaboradores`;}
     }catch(err){document.getElementById('import-preview').innerHTML=`<div class="alert alert-danger">Erro: ${err.message}</div>`;}
   };
   reader.readAsText(file,'UTF-8');
@@ -2181,15 +2249,62 @@ function normalizeDate(s){
 
 function confirmColabImport(){
   if(!_importPreview.length){toast('Nada para importar','e');return;}
-  let added=0,updated=0;
+  if(!S.colaboradores)S.colaboradores=[];
+
+  // Conjunto de prontuários presentes na planilha
+  const prontsPlanilha=new Set(_importPreview.filter(r=>r.prontuario).map(r=>String(r.prontuario).trim()));
+
+  let added=0, updated=0, demitidos=0;
+
+  // 1. Atualizar/adicionar conforme planilha
   _importPreview.forEach(row=>{
     if(!row.nome)return;
-    const existing=(S.colaboradores||[]).find(c=>c.prontuario&&row.prontuario&&c.prontuario===row.prontuario);
-    if(existing){existing.nome=row.nome;if(row.funcao)existing.funcao=row.funcao;if(row.admissao)existing.admissao=row.admissao;updated++;}
-    else{if(!S.colaboradores)S.colaboradores=[];S.colaboradores.push({id:'c'+Date.now()+Math.random().toString(36).slice(2,6),prontuario:row.prontuario,nome:row.nome,funcao:row.funcao,admissao:row.admissao,setor:'',unidade:'',status:'ativo',sexo:'',obs:''});added++;}
+    const pront=String(row.prontuario||'').trim();
+    const existing=S.colaboradores.find(c=>c.prontuario&&String(c.prontuario).trim()===pront&&pront!=='');
+
+    if(existing){
+      // Atualiza nome e função sempre
+      existing.nome=row.nome;
+      if(row.funcao)existing.funcao=row.funcao;
+      if(row.admissao)existing.admissao=row.admissao;
+      // Atualiza status pela situação (se disponível)
+      if(row.statusDeriv)existing.status=row.statusDeriv;
+      // Atualiza unidade pelo opera (se disponível e mapeado)
+      if(row.unidadeDeriv)existing.unidade=row.unidadeDeriv;
+      updated++;
+    } else {
+      // Novo colaborador
+      const novoStatus=row.statusDeriv||'ativo';
+      const novaUnidade=row.unidadeDeriv||'';
+      S.colaboradores.push({
+        id:'c'+Date.now()+Math.random().toString(36).slice(2,6),
+        prontuario:pront,
+        nome:row.nome,
+        funcao:row.funcao||'',
+        admissao:row.admissao||'',
+        setor:'',
+        unidade:novaUnidade,
+        status:novoStatus,
+        sexo:'',
+        obs:''
+      });
+      added++;
+    }
   });
+
+  // 2. Marcar como demitido quem não está na planilha (apenas ativos/afastados)
+  S.colaboradores.forEach(c=>{
+    if(c.status==='demitido')return; // já demitido, não mexe
+    const pront=String(c.prontuario||'').trim();
+    if(pront&&!prontsPlanilha.has(pront)){
+      c.status='demitido';
+      demitidos++;
+    }
+  });
+
   closeModal();populateColabFilters();_colabPage=0;_treinCacheKey='';renderColabs();scheduleAutoSave();
-  toast(`✅ ${added} adicionados, ${updated} atualizados!`,'s');_importPreview=[];
+  toast(`✅ ${added} adicionados · ${updated} atualizados · ${demitidos} demitidos`,'s');
+  _importPreview=[];
 }
 
 function openColabModal(eid){
