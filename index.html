@@ -408,8 +408,14 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
           </div>
           <button class="btn btn-p" id="btn-ntl" style="display:none" onclick="openTaskModal()">+ Nova Tarefa</button>
         </div>
+        <div id="bulk-del-bar" style="display:none;margin-bottom:8px;display:none;align-items:center;gap:8px">
+          <span id="bulk-sel-count" style="font-size:12px;color:var(--text3)">0 selecionadas</span>
+          <button class="btn btn-d btn-sm" onclick="delSelectedTasks()">🗑 Excluir selecionadas</button>
+          <button class="btn btn-sm" onclick="clearTaskSelection()">✕ Limpar seleção</button>
+        </div>
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl)">
           <div class="tw"><table class="dt"><thead><tr>
+            <th id="th-task-chk" style="width:32px"><input type="checkbox" id="chk-all-tasks" style="accent-color:var(--accent)" onchange="toggleAllTaskChk(this)"></th>
             <th>Título</th><th>Responsável</th><th>Unidade</th><th>Turno</th><th>Início</th><th>Prazo</th><th>Status</th><th>Prio.</th><th>Ações</th>
           </tr></thead><tbody id="lt-body"></tbody></table></div>
         </div>
@@ -517,6 +523,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
         <div class="toolbar">
           <span class="toolbar-title">🎓 Treinamentos</span>
           <select class="fi" id="trein-unit-f" onchange="renderTreinamentos()" style="width:160px"><option value="">Todas as unidades</option></select>
+          <button class="btn btn-sm" onclick="setView('relatorios');setTimeout(()=>document.getElementById('rel-trein-menu').style.display='block',100)">📈 Relatório</button>
           <button class="btn btn-p btn-sm" id="btn-new-trein" style="display:none" onclick="openTreinModal()">+ Cadastrar Treinamento</button>
         </div>
         <div id="trein-stats" class="stats-grid"></div>
@@ -537,6 +544,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
             <option value="desatualizada">Desatualizada</option>
           </select>
           <button class="btn btn-warn btn-sm" id="btn-oss-desatualizar" style="display:none" onclick="openOSSDesatualizarModal()">⚠️ Marcar como Desatualizada</button>
+          <button class="btn btn-sm" onclick="setView('relatorios');setTimeout(()=>gerarRelatorio('oss'),150)">📈 Relatório</button>
           <button class="btn btn-p btn-sm" id="btn-oss-novo" style="display:none" onclick="openOSSModal()">+ Nova OS</button>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
@@ -631,7 +639,8 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
               <div class="card-body">
                 <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
                   <span style="font-size:12px;flex:1">📋 Ordens de Serviço — situação geral</span>
-                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('oss')">Gerar</button>
+                  <select class="fi" id="rel-oss-func" style="width:140px"><option value="">Todas as funções</option></select>
+                  <button class="btn btn-sm btn-p" onclick="populateRelOSSFuncs();gerarRelatorio('oss')">Gerar</button>
                 </div>
                 <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
                   <span style="font-size:12px;flex:1">🔍 Inspeções de Segurança</span>
@@ -641,9 +650,17 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
                   <span style="font-size:12px;flex:1">⚠️ Desvios e Incidentes</span>
                   <button class="btn btn-sm btn-p" onclick="gerarRelatorio('desvios')">Gerar</button>
                 </div>
-                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0">
-                  <span style="font-size:12px;flex:1">🧯 Extintores e Hidrantes</span>
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
+                  <span style="font-size:12px;flex:1">🧯 Extintores e Hidrantes (juntos)</span>
                   <button class="btn btn-sm btn-p" onclick="gerarRelatorio('extintores')">Gerar</button>
+                </div>
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
+                  <span style="font-size:12px;flex:1">🧯 Apenas Extintores</span>
+                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('so_extintores')">Gerar</button>
+                </div>
+                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0">
+                  <span style="font-size:12px;flex:1">💧 Apenas Hidrantes</span>
+                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('so_hidrantes')">Gerar</button>
                 </div>
               </div>
             </div>
@@ -1128,6 +1145,37 @@ function updateCounts(){
 
 function setQF(f){S_qf=f;renderKanban();if(document.getElementById('v-list')?.style.display!=='none')renderList();updateCounts();}
 
+
+// ============ BULK TASK DELETE ============
+function updateBulkBar(){
+  const checked=document.querySelectorAll('.task-chk:checked');
+  const bar=document.getElementById('bulk-del-bar');
+  const cnt=document.getElementById('bulk-sel-count');
+  if(bar){bar.style.display=checked.length>0?'flex':'none';}
+  if(cnt)cnt.textContent=checked.length+' tarefa(s) selecionada(s)';
+  // Sync select-all checkbox
+  const all=document.querySelectorAll('.task-chk');
+  const chkAll=document.getElementById('chk-all-tasks');
+  if(chkAll)chkAll.checked=all.length>0&&checked.length===all.length;
+}
+function toggleAllTaskChk(el){
+  document.querySelectorAll('.task-chk').forEach(c=>c.checked=el.checked);
+  updateBulkBar();
+}
+function clearTaskSelection(){
+  document.querySelectorAll('.task-chk').forEach(c=>c.checked=false);
+  const chkAll=document.getElementById('chk-all-tasks');if(chkAll)chkAll.checked=false;
+  updateBulkBar();
+}
+function delSelectedTasks(){
+  const ids=[...document.querySelectorAll('.task-chk:checked')].map(c=>c.value);
+  if(!ids.length){toast('Nenhuma tarefa selecionada','e');return;}
+  if(!confirm(`Excluir ${ids.length} tarefa(s) selecionada(s)?`))return;
+  S.tasks=S.tasks.filter(t=>!ids.includes(t.id));
+  renderList();renderKanban();updateCounts();scheduleAutoSave();
+  toast(`${ids.length} tarefa(s) excluída(s)`,'i');
+}
+
 // ============ KANBAN ============
 function renderKanban(){
   const b=document.getElementById('kboard');b.innerHTML='';
@@ -1209,12 +1257,13 @@ function renderList(){
     if(fp==='atrasado'&&!overdue(t))return false;
     return true;
   });
-  if(!items.length){body.innerHTML='<tr><td colspan="9" class="empty">Nenhuma tarefa encontrada.</td></tr>';return;}
+  if(!items.length){body.innerHTML='<tr><td colspan="10" class="empty">Nenhuma tarefa encontrada.</td></tr>';return;}
   const cu=S_cu;
   body.innerHTML=items.map(t=>{
     const u=S.users.find(x=>x.id===t.uid)||{name:'—'};const ov=overdue(t);
     const canE=isRoot(cu)||cu.p.isAdmin;const canD=isRoot(cu)||cu.p.isAdmin||cu.p.deleteTask;
     return `<tr>
+      <td style="width:32px">${canD?`<input type="checkbox" class="task-chk" value="${t.id}" style="accent-color:var(--accent)" onchange="updateBulkBar()">`:''}</td>
       <td class="td-main">${t.title}${t.desc?`<div class="td-sub">${t.desc.slice(0,50)}…</div>`:''}</td>
       <td>${u.name.split(' ')[0]}</td><td>${t.unit}</td>
       <td>${t.turno==='conjunto'?'🌞🌙':t.turno==='noturno'?'🌙 Not.':'🌞 Diu.'}</td>
@@ -1320,16 +1369,29 @@ function delMinhaTask(id){
 // ============ TASK MODAL ============
 function openTaskModal(defaultCol,eid){
   const t=eid?S.tasks.find(x=>x.id===eid):null;const cu=S_cu;
-  const users=S.users.filter(u=>u.active);
-  const uo=users.map(u=>`<option value="${u.id}" ${(t?.uid||cu.id)===u.id?'selected':''}>${u.name}</option>`).join('');
+  const isAdm=isRoot(cu)||cu.p?.isAdmin;
+  const users=S.users.filter(u=>u.active&&u.un!==ROOT_UN);
   const uu=S.cfg.units||[];
+  const uo=users.map(u=>`<option value="${u.id}" ${(t?.uid||cu.id)===u.id?'selected':''}>${u.name}</option>`).join('');
   const uno=uu.map(u=>`<option value="${u}" ${(t?.unit||uu[0])===u?'selected':''}>${u}</option>`).join('');
+  // Checkboxes para replicar (só no modo criação e para admins)
+  const replicarHtml=(!eid&&isAdm)?`
+    <div class="sep"></div>
+    <div class="fg">
+      <label class="flbl">🔁 Replicar para outros usuários <span style="font-size:10px;color:var(--text3)">(opcional — cada um receberá sua própria cópia)</span></label>
+      <div class="cb-g" style="max-height:160px;overflow-y:auto;margin-top:4px">
+        ${users.filter(u=>u.id!==(t?.uid||cu.id)).map(u=>`<label class="cb-item">
+          <input type="checkbox" class="rep-user-chk" value="${u.id}" style="accent-color:var(--accent)"> ${u.name}
+          <span style="font-size:10px;color:var(--text3)">(${(u.units||[]).join(', ')||'—'} · ${u.turno==='noturno'?'🌙':'🌞'})</span>
+        </label>`).join('')}
+      </div>
+    </div>`:'';
   showModal(`<div class="modal-hdr"><div class="modal-ttl">${t?'Editar Tarefa':'Nova Tarefa'}</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
     <div class="fg"><label class="flbl">Título *</label><input class="finput" id="tk-title" value="${t?.title||''}"></div>
     <div class="fg"><label class="flbl">Descrição</label><textarea class="fta" id="tk-desc">${t?.desc||''}</textarea></div>
     <div class="fgrid">
-      <div class="fg"><label class="flbl">Responsável</label><select class="fsel" id="tk-uid">${uo}</select></div>
+      <div class="fg"><label class="flbl">Responsável</label><select class="fsel" id="tk-uid" onchange="preencherUnitTurnoByUser()">${uo}</select></div>
       <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="tk-unit">${uno}</select></div>
     </div>
     <div class="fgrid">
@@ -1354,8 +1416,28 @@ function openTaskModal(defaultCol,eid){
       <option value="revisao" ${t.status==='revisao'?'selected':''}>Em Revisão</option>
       <option value="concluido" ${t.status==='concluido'?'selected':''}>Concluído</option>
     </select></div>`:''}
+    ${replicarHtml}
   </div>
   <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTask('${eid||''}','${defaultCol||'pendente'}')">💾 Salvar</button></div>`,true);
+  // Auto-preenche unidade/turno ao abrir para novo usuário
+  if(!eid)setTimeout(()=>preencherUnitTurnoByUser(),50);
+}
+
+// Preenche unidade e turno com base no usuário selecionado
+function preencherUnitTurnoByUser(){
+  const uid=document.getElementById('tk-uid')?.value;
+  if(!uid)return;
+  const u=S.users.find(x=>x.id===uid);if(!u)return;
+  const unitSel=document.getElementById('tk-unit');
+  const turnoSel=document.getElementById('tk-turno');
+  // Turno do usuário
+  if(turnoSel&&u.turno){turnoSel.value=u.turno;}
+  // Unidade: se usuário tem só 1, seleciona; se tem várias, deixa em branco para escolher
+  if(unitSel&&u.units&&u.units.length===1){unitSel.value=u.units[0];}
+  else if(unitSel&&u.units&&u.units.length>1){
+    // Mantém unidade atual se já é válida para esse usuário, senão limpa
+    if(!u.units.includes(unitSel.value))unitSel.value=u.units[0]||'';
+  }
 }
 
 function saveTask(eid,defaultCol){
@@ -1365,10 +1447,33 @@ function saveTask(eid,defaultCol){
   if(eid){
     const t=S.tasks.find(x=>x.id===eid);
     if(t){t.title=title;t.desc=document.getElementById('tk-desc').value.trim();t.uid=document.getElementById('tk-uid').value;t.unit=document.getElementById('tk-unit').value;t.turno=document.getElementById('tk-turno').value;t.prio=document.getElementById('tk-prio').value;t.start=document.getElementById('tk-start').value;t.due=due;if(document.getElementById('tk-status'))t.status=document.getElementById('tk-status').value;}
+    closeModal();renderKanban();if(document.getElementById('v-list')?.style.display!=='none')renderList();updateCounts();scheduleAutoSave();toast('Tarefa atualizada!','s');
   }else{
-    S.tasks.push({id:'t'+Date.now(),title,desc:document.getElementById('tk-desc').value.trim(),uid:document.getElementById('tk-uid').value,unit:document.getElementById('tk-unit').value,turno:document.getElementById('tk-turno').value,prio:document.getElementById('tk-prio').value,start:document.getElementById('tk-start').value,due,status:defaultCol,obs:[]});
+    const baseTask={title,desc:document.getElementById('tk-desc').value.trim(),unit:document.getElementById('tk-unit').value,prio:document.getElementById('tk-prio').value,start:document.getElementById('tk-start').value,due,status:defaultCol,obs:[]};
+    const mainUid=document.getElementById('tk-uid').value;
+    const mainTurno=document.getElementById('tk-turno').value;
+    S.tasks.push({id:'t'+Date.now(),...baseTask,uid:mainUid,turno:mainTurno});
+    // Replicar para usuários selecionados
+    const repChecks=[...document.querySelectorAll('.rep-user-chk:checked')];
+    let repCount=0;
+    repChecks.forEach(chk=>{
+      const repUid=chk.value;
+      const repUser=S.users.find(x=>x.id===repUid);
+      if(!repUser)return;
+      // Turno do usuário replicado; unidade: se 1 usa a dele, se várias usa a mesma da tarefa principal se válida senão a primeira dele
+      const repTurno=repUser.turno||'diurno';
+      const repUnits=repUser.units||[];
+      const repUnit=repUnits.includes(baseTask.unit)?baseTask.unit:(repUnits[0]||baseTask.unit);
+      S.tasks.push({id:'t'+Date.now()+repUid,uid:repUid,turno:repTurno,unit:repUnit,...baseTask,obs:[]});
+      // Aviso para o usuário replicado
+      criarAvisoSistema(repUid,`📋 Nova tarefa atribuída: "${title}" · Prazo: ${fmtD(due)}`);
+      repCount++;
+    });
+    // Aviso para o responsável principal
+    criarAvisoSistema(mainUid,`📋 Nova tarefa atribuída: "${title}" · Prazo: ${fmtD(due)}`);
+    closeModal();renderKanban();if(document.getElementById('v-list')?.style.display!=='none')renderList();updateCounts();scheduleAutoSave();
+    toast(repCount>0?`Tarefa criada e replicada para ${repCount+1} usuário(s)!`:'Tarefa criada!','s');
   }
-  closeModal();renderKanban();if(document.getElementById('v-list')?.style.display!=='none')renderList();updateCounts();scheduleAutoSave();toast(eid?'Tarefa atualizada!':'Tarefa criada!','s');
 }
 
 function delTask(id){
@@ -1406,7 +1511,11 @@ function openDetail(id){
 
 function changeStatus(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  const prevStatus=t.status;
   t.status=document.getElementById('det-status').value;
+  if(!isRoot(S_cu)&&!S_cu?.p?.isAdmin&&prevStatus!==t.status){
+    criarAvisoSistema(null,`🔄 ${S_cu.name} alterou status de "${t.title}": ${slbl(prevStatus)} → ${slbl(t.status)}`);
+  }
   closeModal();renderKanban();renderList();updateCounts();scheduleAutoSave();toast('Status atualizado','s');
 }
 
@@ -1416,13 +1525,48 @@ function addObs(id){
   if(!txt){toast('Escreva uma observação','e');return;}
   if(!t.obs)t.obs=[];
   t.obs.push({txt,user:S_cu.name,dt:nowDt(),sys:false});
+  // Notificar admins
+  if(!isRoot(S_cu)&&!S_cu?.p?.isAdmin){
+    criarAvisoSistema(null,`💬 ${S_cu.name} adicionou observação em "${t.title}": ${txt.slice(0,80)}`);
+  }
   closeModal();scheduleAutoSave();toast('Observação adicionada','s');
 }
 
 // ============ AVISOS ============
+
+// Cria aviso automático do sistema
+// para='admin' → apenas admins veem; uid específico → usuário e admins
+function criarAvisoSistema(paraUid, mensagem, tipo='sistema'){
+  if(!S.avisos)S.avisos=[];
+  S.avisos.push({
+    id:'av'+Date.now()+Math.random().toString(36).slice(2,5),
+    title:tipo==='sistema'?'🔔 Notificação do Sistema':'📢 Aviso',
+    body:mensagem,
+    dt:nowDt(),
+    readBy:[],
+    paraUid:paraUid||null,  // null = para todos os admins
+    isSistema:true
+  });
+  updateAvisosBadge();
+}
+
 function updateAvisosBadge(){
-  const unread=(S.avisos||[]).filter(a=>!(a.readBy||[]).includes(S_cu?.id)).length;
+  const unread=(S.avisos||[]).filter(a=>{
+    if((a.readBy||[]).includes(S_cu?.id))return false;
+    return podeVerAviso(a);
+  }).length;
   const el=document.getElementById('sc-avisos');if(el)el.textContent=unread;
+}
+
+function podeVerAviso(a){
+  const cu=S_cu;if(!cu)return false;
+  const isAdm=isRoot(cu)||cu.p?.isAdmin;
+  // Avisos do sistema com destinatário específico
+  if(a.isSistema&&a.paraUid){
+    return a.paraUid===cu.id||isAdm;
+  }
+  // Avisos publicados por admins — visíveis para todos
+  return true;
 }
 function marcarTodosLidos(){
   (S.avisos||[]).forEach(a=>{if(!a.readBy)a.readBy=[];if(!a.readBy.includes(S_cu.id))a.readBy.push(S_cu.id);});
@@ -1431,8 +1575,9 @@ function marcarTodosLidos(){
 function renderAvisos(){
   const el=document.getElementById('avisos-list');if(!el)return;
   const av=(S.avisos||[]).slice().reverse();
-  if(!av.length){el.innerHTML='<div class="empty">Nenhum aviso.</div>';return;}
-  el.innerHTML=av.map(a=>{
+  const avFilt=av.filter(a=>podeVerAviso(a));
+  if(!avFilt.length){el.innerHTML='<div class="empty">Nenhum aviso.</div>';return;}
+  el.innerHTML=avFilt.map(a=>{
     const unread=!(a.readBy||[]).includes(S_cu?.id);
     return `<div class="msg-card ${unread?'unread':''}" onclick="markAvisoRead('${a.id}',this)">
       <div class="msg-hdr"><span class="msg-from">${a.title||'Aviso'}</span><span class="msg-date">${fmtD(a.dt)}</span></div>
@@ -1501,6 +1646,9 @@ function sendMsg(){
   const body=document.getElementById('msg-body').value.trim();if(!body){toast('Escreva uma mensagem','e');return;}
   if(!S.messages)S.messages=[];
   S.messages.push({id:'m'+Date.now(),uid:S_cu.id,from:S_cu.name,type:document.getElementById('msg-type').value,body,dt:nowDt(),reply:null,replied:false,readByUser:false});
+  if(!isRoot(S_cu)&&!S_cu?.p?.isAdmin){
+    criarAvisoSistema(null,`✉️ Nova mensagem de ${S_cu.name}: ${body.slice(0,80)}`);
+  }
   closeModal();renderMsgs();updateMsgBadge();scheduleAutoSave();toast('Enviada!','s');
 }
 function replyMsg(id){
@@ -2786,6 +2934,16 @@ function saveSettings(){
 
 
 // ============ RELATÓRIOS ============
+
+function populateRelOSSFuncs(){
+  const sel=document.getElementById('rel-oss-func');if(!sel)return;
+  const prev=sel.value;
+  const funcs=[...new Set((S.colaboradores||[]).map(c=>c.funcao).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">Todas as funções</option>';
+  funcs.forEach(f=>sel.innerHTML+=`<option value="${f}">${f}</option>`);
+  if(prev)sel.value=prev;
+}
+
 function gerarRelatorio(tipo){
   const unit=document.getElementById('rel-unit')?.value||'';
   const de=document.getElementById('rel-de')?.value||'';
@@ -2835,7 +2993,8 @@ function gerarRelatorio(tipo){
       </table></div></div></div>`;
   }
   else if(tipo==='oss'){
-    const colabs=(S.colaboradores||[]).filter(c=>c.status!=='demitido'&&filtUnit(c.unidade));
+    const funcFilt=document.getElementById('rel-oss-func')?.value||'';
+    const colabs=(S.colaboradores||[]).filter(c=>c.status!=='demitido'&&filtUnit(c.unidade)&&(!funcFilt||c.funcao===funcFilt));
     const ossIdx=buildOSSIndex();
     html=headerHtml+`<div class="card"><div class="card-head"><div class="card-title">${colabs.length} colaborador(es)</div>
       <button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button></div>
@@ -2876,9 +3035,11 @@ function gerarRelatorio(tipo){
         </tr>`).join(''):'<tr><td colspan="8" class="empty">Nenhum desvio.</td></tr>'}</tbody>
       </table></div></div></div>`;
   }
-  else if(tipo==='extintores'){
-    const exts=(S.extintores||[]).filter(e=>filtUnit(e.unidade));
-    const hids=(S.hidrantes||[]).filter(h=>filtUnit(h.unidade));
+  else if(tipo==='extintores'||tipo==='so_extintores'||tipo==='so_hidrantes'){
+    const mostrarExt=tipo!=='so_hidrantes';
+    const mostrarHid=tipo!=='so_extintores';
+    const exts=mostrarExt?(S.extintores||[]).filter(e=>filtUnit(e.unidade)):[];
+    const hids=mostrarHid?(S.hidrantes||[]).filter(h=>filtUnit(h.unidade)):[];
     html=headerHtml+`<div class="card"><div class="card-head"><div class="card-title">Extintores (${exts.length})</div>
       <button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button></div>
       <div class="no-pad"><div class="tw"><table class="dt">
