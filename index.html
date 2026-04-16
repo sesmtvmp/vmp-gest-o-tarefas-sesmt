@@ -254,6 +254,10 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
       </div>
       <div class="sb-section">
         <div class="sb-lbl">Comunicação</div>
+        <div class="nav-item" id="n-avisos" onclick="setView('avisos')">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.5" d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+          Avisos<span class="sc new" id="sc-avisos">0</span>
+        </div>
         <div class="nav-item" id="n-msgs" onclick="setView('msgs')">
           <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.5" d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
           Mensagens<span class="sc new" id="sc-msgs">0</span>
@@ -375,6 +379,15 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
         </div>
       </div>
 
+      <!-- AVISOS -->
+      <div id="v-avisos" style="display:none">
+        <div class="toolbar">
+          <span class="toolbar-title">🔔 Avisos</span>
+          <button class="btn btn-sm" onclick="marcarTodosLidos()" style="font-size:11px">✓ Marcar todos como lidos</button>
+        </div>
+        <div id="avisos-list"></div>
+      </div>
+
       <!-- MESSAGES -->
       <div id="v-msgs" style="display:none">
         <div class="toolbar">
@@ -410,14 +423,6 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
           </div>
           <div class="ss"><div class="ss-ttl">📧 E-mail do administrador</div>
             <div class="fg"><label class="flbl">E-mail para receber alertas de tarefas</label><input class="finput" id="c-email"></div>
-          </div>
-          <div class="ss"><div class="ss-ttl">⚙️ EmailJS — Envio de notificações por e-mail</div>
-            <div class="info-box" style="margin-bottom:10px;font-size:11px">Para enviar e-mails reais, crie uma conta gratuita em <strong>emailjs.com</strong>, configure um serviço e um template com as variáveis <code>to_email</code>, <code>subject</code> e <code>message</code>, e preencha abaixo.</div>
-            <div class="fgrid">
-              <div class="fg"><label class="flbl">Service ID</label><input class="finput" id="c-ejs-svc" placeholder="service_xxxxxxx"></div>
-              <div class="fg"><label class="flbl">Template ID</label><input class="finput" id="c-ejs-tpl" placeholder="template_xxxxxxx"></div>
-            </div>
-            <div class="fg"><label class="flbl">Public Key (User ID)</label><input class="finput" id="c-ejs-key" placeholder="xxxxxxxxxxxxxxxxxxxx"></div>
           </div>
           <div class="ss"><div class="ss-ttl">🏗️ Unidades</div>
             <div id="ul" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
@@ -512,7 +517,7 @@ const nowDt=()=>new Date().toISOString().slice(0,10);
 // Real-time: polling every 10s, merges remote changes without disrupting active UI
 
 // ============ STATE ============
-let S = { cfg:{}, users:[], tasks:[], messages:[] };
+let S = { cfg:{}, users:[], tasks:[], messages:[], avisos:[] };
 let S_cu = null, S_qf = null;
 
 let _lastUpdatedAt = null;   // tracks last known server timestamp
@@ -565,7 +570,7 @@ async function saveToKV(){
   _saving = true;
   showSaving(true);
   try{
-    const payload = { cfg: S.cfg, users: S.users, tasks: S.tasks, messages: S.messages };
+    const payload = { cfg: S.cfg, users: S.users, tasks: S.tasks, messages: S.messages, avisos: S.avisos||[] };
     const r = await fetch('/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -626,6 +631,7 @@ function applyData(data, manual=false){
   if(data.users)    S.users    = data.users;
   if(data.tasks)    S.tasks    = data.tasks;
   if(data.messages) S.messages = data.messages || [];
+  if(data.avisos)   S.avisos   = data.avisos   || [];
 
   // Re-sync S_cu reference in case user list was reloaded
   if(S_cu){
@@ -640,6 +646,7 @@ function applyData(data, manual=false){
     if(!dragId) renderKanban();
     if(document.getElementById('v-list')?.style.display !== 'none') renderList();
     if(document.getElementById('v-concluidas')?.style.display !== 'none') renderConcluidas();
+    if(document.getElementById('v-avisos')?.style.display !== 'none') renderAvisos();
     if(document.getElementById('v-msgs')?.style.display !== 'none') renderMsgs();
   }
 }
@@ -698,6 +705,7 @@ function doLogin(){
   document.getElementById('ha').style.color=atc(i);
   applySettings();populateFilters();updateCounts();renderKanban();updateMsgBadge();
   checkDeadlineAlerts();
+  updateAvisosBadge();
   startPolling(); // begin real-time sync for all users
 }
 
@@ -754,7 +762,7 @@ function changePassword(){
 
 // ============ VIEWS ============
 function setView(v){
-  ['kanban','list','concluidas','msgs','users','cfg','github'].forEach(x=>{
+  ['kanban','list','concluidas','avisos','msgs','users','cfg','github'].forEach(x=>{
     const el=document.getElementById('v-'+x);
     if(el)el.style.display=x===v?'block':'none';
     const n=document.getElementById('n-'+x);
@@ -763,6 +771,7 @@ function setView(v){
   if(v==='kanban')renderKanban();
   if(v==='list')renderList();
   if(v==='concluidas')renderConcluidas();
+  if(v==='avisos')renderAvisos();
   if(v==='msgs')renderMsgs();
   if(v==='users')renderUsers();
   if(v==='cfg')renderCfg();
@@ -827,6 +836,7 @@ function updateCounts(){
   document.getElementById('sb-tot').textContent=active.length;
   document.getElementById('sb-ok').textContent=conc.length;
   updateMsgBadge();
+  updateAvisosBadge();
 }
 
 function setQF(f){
@@ -1052,19 +1062,24 @@ function delSelectedConc(){
 
 // ============ TASK MODAL (ADMIN ONLY - MOD 02) ============
 function tmAutoUnit(){
-  // Auto-preenche unidade se usuário tiver só 1 unidade
   const uid=document.getElementById('tm-u')?.value;
   if(!uid)return;
   const u=S.users.find(x=>x.id===uid);
   if(!u)return;
+  // Auto-preenche turno conforme o usuário
+  const trSel=document.getElementById('tm-tr');
+  if(trSel&&u.turno){
+    for(let i=0;i<trSel.options.length;i++){
+      if(trSel.options[i].value===u.turno){trSel.selectedIndex=i;break;}
+    }
+  }
+  // Auto-preenche unidade se usuário tiver só 1
   const unSel=document.getElementById('tm-un');
-  if(u.units&&u.units.length===1){
-    // Seleciona a única unidade do usuário
+  if(unSel&&u.units&&u.units.length===1){
     for(let i=0;i<unSel.options.length;i++){
       if(unSel.options[i].value===u.units[0]){unSel.selectedIndex=i;break;}
     }
   }
-  // Se tiver mais de 1 unidade, não faz nada (admin define)
 }
 
 function openTaskModal(defCol,eid){
@@ -1241,8 +1256,9 @@ function saveTask(eid){
             id:'t'+(Date.now()+offset++),
             uid:uSel.value,
             unit:un,
-            start:base.start,          // herda data de início da tarefa base
-            due:dInp?.value||base.due, // prazo individual se definido, senão herda
+            turno:repUser.turno||base.turno, // turno do usuário responsável
+            start:base.start,
+            due:dInp?.value||base.due,
             status:'pendente',
             obs:[{by:cu.id,name:cu.name,dt:nowDt(),
               txt:`Replicada para ${repUser.name} — ${un}.`,t:'s'}]
@@ -1498,125 +1514,172 @@ function deleteMsg(mid){
   renderMsgs();toast('Mensagem excluída.','i');scheduleAutoSave();
 }
 
-// ============ EMAIL / NOTIFICAÇÕES ============
-// Envia e-mail via EmailJS (configurado em S.cfg.emailjsService/Template/Key)
-// Fallback: simula no console se não configurado
-async function sendEmail(to, subject, body){
-  if(!to){console.warn('[EMAIL] Sem destinatário para:',subject);return;}
-  // Tenta EmailJS se configurado
-  const svc=S.cfg.emailjsService;
-  const tpl=S.cfg.emailjsTemplate;
-  const key=S.cfg.emailjsKey;
-  if(svc&&tpl&&key){
-    try{
-      await fetch('https://api.emailjs.com/api/v1.0/email/send',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({service_id:svc,template_id:tpl,user_id:key,
-          template_params:{to_email:to,subject,message:body}})
-      });
-      console.log(`✅ [EMAIL] Enviado para ${to}: ${subject}`);
-    }catch(e){
-      console.warn(`⚠️ [EMAIL] Falha ao enviar para ${to}:`,e.message);
-    }
-  }else{
-    // Simula no console quando EmailJS não está configurado
-    console.log(`📧 [EMAIL SIMULADO]\nPara: ${to}\nAssunto: ${subject}\n\n${body}\n${'─'.repeat(40)}`);
+// ============ SISTEMA DE AVISOS INTERNOS ============
+// Avisos são armazenados em S.avisos = [{id, uid, tipo, titulo, corpo, dt, lido, taskId}]
+// tipos: 'nova_tarefa' | 'vencida' | 'alteracao' | 'admin_alteracao' | 'admin_vencida'
+
+function addAviso(uid, tipo, titulo, corpo, taskId=null){
+  if(!S.avisos)S.avisos=[];
+  // Evita duplicatas de prazo no mesmo dia
+  if(tipo==='vencida'||tipo==='admin_vencida'){
+    const hoje=nowDt();
+    if(S.avisos.find(a=>a.uid===uid&&a.tipo===tipo&&a.taskId===taskId&&a.dt.startsWith(hoje)))return;
   }
-}
-
-function getAdminEmails(){
-  // Sempre inclui o email geral de configurações + emails de admins cadastrados
-  const emails=[];
-  // Email geral das configurações (sempre incluído se existir)
-  if(S.cfg.email)emails.push(S.cfg.email);
-  // Emails individuais de admins com email cadastrado
-  S.users.forEach(u=>{
-    if((isRoot(u)||u.p?.isAdmin)&&u.email&&u.email!==S.cfg.email)emails.push(u.email);
+  S.avisos.push({
+    id:'av'+Date.now()+Math.random().toString(36).slice(2,6),
+    uid, tipo, titulo, corpo,
+    dt:new Date().toISOString(),
+    lido:false,
+    taskId
   });
-  return [...new Set(emails)];
+  updateAvisosBadge();
 }
 
-function notifyAdmins(task,byU,action){
-  const emails=getAdminEmails();
-  if(!emails.length){
-    console.warn('[NOTIFY] Nenhum email de admin configurado. Configure em Configurações > E-mail.');
+function getAvisosParaUsuario(cu){
+  if(!S.avisos)return[];
+  if(isRoot(cu)||cu.p?.isAdmin){
+    // Admin vê todos os avisos de admin + seus próprios
+    return S.avisos.filter(a=>
+      a.uid===cu.id ||
+      a.uid==='__admin__'
+    );
+  }
+  return S.avisos.filter(a=>a.uid===cu.id);
+}
+
+function updateAvisosBadge(){
+  if(!S_cu)return;
+  const avisos=getAvisosParaUsuario(S_cu);
+  const naoLidos=avisos.filter(a=>!a.lido).length;
+  const el=document.getElementById('sc-avisos');
+  if(el){el.textContent=naoLidos||'';el.className='sc'+(naoLidos>0?' new':'');}
+}
+
+function renderAvisos(){
+  if(!S.avisos)S.avisos=[];
+  const cu=S_cu;
+  const list=document.getElementById('avisos-list');
+  const avisos=getAvisosParaUsuario(cu);
+  // Marca como lidos ao abrir
+  avisos.forEach(a=>{if(!a.lido)a.lido=true;});
+  updateAvisosBadge();
+
+  if(!avisos.length){
+    list.innerHTML='<div class="empty">Nenhum aviso no momento.</div>';
     return;
   }
-  const taskUser=S.users.find(x=>x.id===task.uid);
-  emails.forEach(email=>{
-    sendEmail(email,
-      `[SST] Tarefa atualizada: "${task.title}"`,
-      `Olá,\n\n${byU.name} realizou uma ação na tarefa:\n\n📋 ${task.title}\n👤 Responsável: ${taskUser?.name||'—'}\n📍 Unidade: ${task.unit}\n🔄 Ação: ${action}\n\nAcesse o sistema para mais detalhes.`
-    );
-  });
+  const sorted=[...avisos].sort((a,b)=>b.dt.localeCompare(a.dt));
+  const iconMap={
+    nova_tarefa:'📋',vencida:'🔴',alteracao:'🔄',
+    admin_alteracao:'🔄',admin_vencida:'⚠️',msg:'✉️'
+  };
+  const colorMap={
+    nova_tarefa:'var(--accent)',vencida:'var(--red)',
+    alteracao:'var(--amber)',admin_alteracao:'var(--amber)',
+    admin_vencida:'var(--red)',msg:'var(--purple)'
+  };
+  list.innerHTML=sorted.map(a=>{
+    const cor=colorMap[a.tipo]||'var(--text3)';
+    const ico=iconMap[a.tipo]||'🔔';
+    const dtStr=new Date(a.dt).toLocaleString('pt-BR');
+    const taskLink=a.taskId?`<button class="btn btn-sm" onclick="closeModal&&closeModal();openDetail('${a.taskId}')" style="margin-top:6px;font-size:11px">Ver tarefa</button>`:'';
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${cor};border-radius:var(--rl);padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+        <div style="font-size:13px;font-weight:600">${ico} ${a.titulo}</div>
+        <span style="font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;margin-left:10px">${dtStr}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6">${a.corpo}</div>
+      ${taskLink}
+    </div>`;
+  }).join('');
 }
 
-function getUserEmail(uid){
-  const u=S.users.find(x=>x.id===uid);
-  return u?.email||null;
+function marcarTodosLidos(){
+  if(!S.avisos)return;
+  const cu=S_cu;
+  S.avisos.forEach(a=>{
+    if(a.uid===cu.id||a.uid==='__admin__')a.lido=true;
+  });
+  updateAvisosBadge();
+  renderAvisos();
+  scheduleAutoSave();
 }
+
+// ─── Funções que criam avisos ───
 
 function notifyTaskCreated(task){
   const u=S.users.find(x=>x.id===task.uid);
-  if(u?.email){
-    sendEmail(u.email,
-      `[SST] Nova tarefa atribuída: "${task.title}"`,
-      `Olá ${u.name},\n\nUma nova tarefa foi atribuída a você:\n\n📋 ${task.title}\n📍 Unidade: ${task.unit}\n🗓 Início: ${fmtD(task.start)}\n📅 Prazo: ${fmtD(task.due)}\n⚠️ Prioridade: ${task.prio}\n\nAcesse o sistema para mais detalhes.`
+  if(!u)return;
+  addAviso(u.id,'nova_tarefa',
+    `Nova tarefa atribuída: "${task.title}"`,
+    `Você recebeu uma nova tarefa.<br>📍 Unidade: <b>${task.unit}</b> | 🗓 Início: <b>${fmtD(task.start)}</b> | 📅 Prazo: <b>${fmtD(task.due)}</b> | ⚠️ Prioridade: <b>${task.prio}</b>`,
+    task.id
+  );
+}
+
+function notifyAdmins(task,byU,action){
+  const taskUser=S.users.find(x=>x.id===task.uid);
+  // Avisa todos os admins (uid especial __admin__)
+  addAviso('__admin__','admin_alteracao',
+    `${byU.name} alterou uma tarefa`,
+    `📋 <b>${task.title}</b><br>👤 Responsável: <b>${taskUser?.name||'—'}</b> | 📍 Unidade: <b>${task.unit}</b><br>🔄 <b>${action}</b>`,
+    task.id
+  );
+  // Também avisa o responsável pela tarefa (se não for quem fez a ação)
+  if(task.uid&&task.uid!==byU.id){
+    addAviso(task.uid,'alteracao',
+      `Sua tarefa foi atualizada`,
+      `📋 <b>${task.title}</b><br>🔄 ${action}<br>Por: <b>${byU.name}</b>`,
+      task.id
     );
   }
+  scheduleAutoSave();
 }
 
 function notifyMsgSent(msg){
-  const emails=getAdminEmails();
-  emails.forEach(email=>{
-    sendEmail(email,
-      `[SST] Nova mensagem de ${msg.fromName}`,
-      `Olá,\n\n${msg.fromName} enviou uma mensagem:\n\n📌 Assunto: ${msg.subject}\n🏷️ Tipo: ${msg.type}\n\n${msg.body}\n\nAcesse o sistema para responder.`
-    );
-  });
+  addAviso('__admin__','msg',
+    `Nova mensagem de ${msg.fromName}`,
+    `📌 <b>${msg.subject}</b><br>🏷️ ${msg.type}<br>${msg.body.slice(0,120)}${msg.body.length>120?'...':''}`
+  );
+  scheduleAutoSave();
 }
 
-// Alertas de prazo — chamado a cada login e a cada 10s no polling
+// Verifica vencimentos — chamado no login e no polling
 function checkDeadlineAlerts(){
-  if(!S_cu||!isRoot(S_cu)&&!S_cu.p?.isAdmin)return;
+  if(!S_cu)return;
+  const cu=S_cu;
   const now=new Date();now.setHours(0,0,0,0);
+  const isAdm=isRoot(cu)||cu.p?.isAdmin;
   S.tasks.forEach(t=>{
     if(t.status==='concluido'||!t.due)return;
-    const u=S.users.find(x=>x.id===t.uid);
-    if(!u||!u.email)return;
     const due=new Date(t.due);due.setHours(0,0,0,0);
-    const diff=Math.round((due-now)/(1000*60*60*24)); // dias
-    const lastAlert=t._lastAlert||'';
-    const todayStr=nowDt();
-    if(diff===30&&lastAlert!==`30-${todayStr}`){
-      t._lastAlert=`30-${todayStr}`;
-      sendEmail(u.email,`[SST] ⚠️ Tarefa vence em 1 mês: "${t.title}"`,
-        `Olá ${u.name},\n\nLembrete: sua tarefa "${t.title}" (${t.unit}) vence em 1 mês, em ${fmtD(t.due)}.\n\nAcesse o sistema e verifique.`);
-    }else if(diff===7&&lastAlert!==`7-${todayStr}`){
-      t._lastAlert=`7-${todayStr}`;
-      sendEmail(u.email,`[SST] ⚠️ Tarefa vence em 1 semana: "${t.title}"`,
-        `Olá ${u.name},\n\nAtenção: sua tarefa "${t.title}" (${t.unit}) vence em 1 semana, em ${fmtD(t.due)}.\n\nAcesse o sistema urgente.`);
-    }else if(diff===1&&lastAlert!==`1-${todayStr}`){
-      t._lastAlert=`1-${todayStr}`;
-      sendEmail(u.email,`[SST] 🚨 Tarefa vence AMANHÃ: "${t.title}"`,
-        `Olá ${u.name},\n\nURGENTE: sua tarefa "${t.title}" (${t.unit}) vence AMANHÃ, em ${fmtD(t.due)}.\n\nAcesse o sistema imediatamente.`);
-    }else if(diff<0&&lastAlert!==`late-${todayStr}`){
-      t._lastAlert=`late-${todayStr}`;
-      sendEmail(u.email,`[SST] 🔴 Tarefa VENCIDA: "${t.title}"`,
-        `Olá ${u.name},\n\nSua tarefa "${t.title}" (${t.unit}) está VENCIDA desde ${fmtD(t.due)} (${Math.abs(diff)} dia(s) de atraso).\n\nAcesse o sistema e regularize.`);
+    const diff=Math.round((due-now)/(1000*60*60*24));
+    if(diff<0){
+      const dias=Math.abs(diff);
+      const u=S.users.find(x=>x.id===t.uid);
+      // Avisa o responsável
+      if(t.uid===cu.id){
+        addAviso(cu.id,'vencida',
+          `Tarefa vencida há ${dias} dia(s)`,
+          `📋 <b>${t.title}</b><br>📍 ${t.unit} | 📅 Prazo era: <b>${fmtD(t.due)}</b>`,
+          t.id
+        );
+      }
+      // Avisa admins sobre qualquer tarefa vencida
+      if(isAdm){
+        addAviso('__admin__','admin_vencida',
+          `Tarefa vencida: "${t.title}"`,
+          `👤 <b>${u?.name||'—'}</b> | 📍 ${t.unit} | 📅 Prazo era: <b>${fmtD(t.due)}</b> (${dias} dia(s) atraso)`,
+          t.id
+        );
+      }
     }
   });
+  updateAvisosBadge();
 }
 
-function simEmailMsg(m){
-  notifyMsgSent(m);
-}
-
-// ============ EMAIL SIM (mantido por compatibilidade) ============
-function simEmail(task,byU,action){
-  notifyAdmins(task,byU,action);
-}
+function simEmailMsg(m){notifyMsgSent(m);}
+function simEmail(task,byU,action){notifyAdmins(task,byU,action);}
 
 // ============ USERS ============
 function renderUsers(){
@@ -1720,9 +1783,6 @@ function renderCfg(){
   document.getElementById('c-ftr').value=c.ftr||'';
   document.getElementById('c-ver').value=c.ver||'';
   document.getElementById('c-email').value=c.email||'';
-  document.getElementById('c-ejs-svc').value=c.emailjsService||'';
-  document.getElementById('c-ejs-tpl').value=c.emailjsTemplate||'';
-  document.getElementById('c-ejs-key').value=c.emailjsKey||'';
   renderUL();
   document.querySelectorAll('.accent-o').forEach(el=>{el.style.outline=el.dataset.c===c.accent?'3px solid #fff':'none';el.style.outlineOffset='2px';});
 }
@@ -1774,9 +1834,6 @@ function saveSettings(){
   S.cfg.ftr=document.getElementById('c-ftr').value;
   S.cfg.ver=document.getElementById('c-ver').value;
   S.cfg.email=document.getElementById('c-email').value;
-  S.cfg.emailjsService=document.getElementById('c-ejs-svc').value.trim();
-  S.cfg.emailjsTemplate=document.getElementById('c-ejs-tpl').value.trim();
-  S.cfg.emailjsKey=document.getElementById('c-ejs-key').value.trim();
   applySettings();
   saveToKV();
   toast('Configurações salvas!','s');
