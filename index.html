@@ -475,10 +475,10 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
       <div id="v-colaboradores" style="display:none">
         <div class="toolbar">
           <span class="toolbar-title">👥 Colaboradores</span>
-          <input class="fi" id="colab-q" placeholder="🔍 Buscar..." oninput="renderColabs()" style="width:160px">
-          <select class="fi" id="colab-func" onchange="renderColabs()"><option value="">Todas as funções</option></select>
-          <select class="fi" id="colab-unit-f" onchange="renderColabs()"><option value="">Todas as unidades</option></select>
-          <select class="fi" id="colab-status-f" onchange="renderColabs()">
+          <input class="fi" id="colab-q" placeholder="🔍 Buscar..." oninput="colabSearch()" style="width:160px">
+          <select class="fi" id="colab-func" onchange="colabResetPage()"><option value="">Todas as funções</option></select>
+          <select class="fi" id="colab-unit-f" onchange="colabResetPage()"><option value="">Todas as unidades</option></select>
+          <select class="fi" id="colab-status-f" onchange="colabResetPage()">
             <option value="">Todos os status</option>
             <option value="ativo">Ativo</option>
             <option value="afastado">Afastado</option>
@@ -487,15 +487,29 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
           <button class="btn btn-g btn-sm" id="btn-import-colab" onclick="openImportColabModal()">📥 Importar Planilha</button>
           <button class="btn btn-p btn-sm" onclick="openColabModal()">+ Colaborador</button>
         </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+          <span id="colab-counter" style="font-size:12px;color:var(--text3)"></span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;color:var(--text3)">Exibir:</span>
+            <select class="fi" id="colab-per-page" onchange="colabResetPage()" style="width:80px">
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="200">200</option>
+              <option value="500">500</option>
+            </select>
+            <span style="font-size:12px;color:var(--text3)">por página</span>
+          </div>
+        </div>
         <div id="colab-table-wrap" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl)">
           <div class="tw"><table class="dt" id="colab-table">
             <thead><tr>
               <th>PRONTUÁRIO</th><th>NOME</th><th>FUNÇÃO</th><th>SETOR</th><th>UNIDADE</th><th>ADMISSÃO</th>
-              <th>STATUS</th><th>TREIN.</th><th>OSS</th><th>AÇÕES</th>
+              <th>STATUS</th><th>TREIN.</th><th>OS</th><th>AÇÕES</th>
             </tr></thead>
             <tbody id="colab-body"></tbody>
           </table></div>
         </div>
+        <div id="colab-pagination" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 0;flex-wrap:wrap"></div>
       </div>
 
       <!-- =================== TREINAMENTOS =================== -->
@@ -512,7 +526,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
       <!-- =================== ORDENS DE SERVIÇO =================== -->
       <div id="v-oss" style="display:none">
         <div class="toolbar">
-          <span class="toolbar-title">📋 Ordens de Serviço de Segurança</span>
+          <span class="toolbar-title">📋 Ordens de Serviço</span>
           <select class="fi" id="oss-func-filter" onchange="renderOSS()" style="width:160px"><option value="">Todas as funções</option></select>
           <select class="fi" id="oss-unit-f" onchange="renderOSS()" style="width:140px"><option value="">Todas as unidades</option></select>
           <button class="btn btn-warn btn-sm" id="btn-oss-desatualizar" style="display:none" onclick="openOSSDesatualizarModal()">⚠️ Marcar como Desatualizada</button>
@@ -879,7 +893,7 @@ function setView(v){
   else if(v==='users')renderUsers();
   else if(v==='cfg')renderCfg();
   else if(v==='dashboard'){populateFilters();renderDashboard();}
-  else if(v==='colaboradores'){populateColabFilters();renderColabs();}
+  else if(v==='colaboradores'){populateColabFilters();_colabPage=0;renderColabs();}
   else if(v==='treinamentos'){populateFilters();renderTreinamentos();}
   else if(v==='oss'){populateOSSFilters();renderOSS();}
   else if(v==='inspecoes')renderInspecoes();
@@ -900,7 +914,7 @@ function populateFilters(){
 function populateColabFilters(){
   const funcs=[...new Set((S.colaboradores||[]).map(c=>c.funcao).filter(Boolean))].sort();
   const sel=document.getElementById('colab-func');
-  if(sel){sel.innerHTML='<option value="">Todas as funções</option>';funcs.forEach(f=>sel.innerHTML+=`<option value="${f}">${f}</option>`);}
+  if(sel){const prev=sel.value;sel.innerHTML='<option value="">Todas as funções</option>';funcs.forEach(f=>sel.innerHTML+=`<option value="${f}">${f}</option>`);if(prev)sel.value=prev;}
   populateFilters();
 }
 function populateOSSFilters(){
@@ -1407,7 +1421,7 @@ function renderDashboard(){
     <div class="stat s-green clickable" style="cursor:pointer" onclick="goToTreinFilter('valido')"><div class="stat-lbl">TREIN. VÁLIDOS</div><div class="stat-val">${totalValid}</div><div class="stat-sub">▶ clique p/ ver</div></div>
     <div class="stat s-amber clickable" style="cursor:pointer" onclick="goToTreinFilter('a_vencer')"><div class="stat-lbl">A VENCER (30d)</div><div class="stat-val">${totalAvencer}</div><div class="stat-sub">▶ clique p/ ver</div></div>
     <div class="stat s-red clickable" style="cursor:pointer" onclick="goToTreinFilter('vencido')"><div class="stat-lbl">TREIN. VENCIDOS</div><div class="stat-val">${totalVencido}</div><div class="stat-sub">▶ clique p/ ver</div></div>
-    <div class="stat s-amber"><div class="stat-lbl">OSS DESATUALIZ.</div><div class="stat-val">${ossDesat}</div></div>
+    <div class="stat s-amber"><div class="stat-lbl">OS DESATUALIZ.</div><div class="stat-val">${ossDesat}</div></div>
     <div class="stat s-red"><div class="stat-lbl">INSP. ATRASADAS</div><div class="stat-val">${inspAtrasado}</div></div>
     <div class="stat s-teal"><div class="stat-lbl">DESVIOS/INCID.</div><div class="stat-val">${(S.desvios||[]).length}</div></div>
     <div class="stat s-red"><div class="stat-lbl">EXT. VENCIDOS</div><div class="stat-val">${extVencidos}</div></div>
@@ -1449,38 +1463,200 @@ function renderDashboard(){
 function goToTreinFilter(status){_dashTreinFilter=status;setView('treinamentos');}
 
 // ============ COLABORADORES ============
-function renderColabs(){
-  const body=document.getElementById('colab-body');if(!body)return;
-  const q=(document.getElementById('colab-q')?.value||'').toLowerCase();
+// ============ COLABORADORES — paginação ============
+let _colabPage=0;
+let _colabFiltered=[];
+let _colabSearchTimer=null;
+
+function colabSearch(){
+  // debounce busca para não re-renderizar a cada tecla com 10k registros
+  clearTimeout(_colabSearchTimer);
+  _colabSearchTimer=setTimeout(()=>colabResetPage(),300);
+}
+
+function colabResetPage(){_colabPage=0;renderColabs();}
+
+function colabGoPage(p){_colabPage=p;renderColabs();}
+
+function getColabFiltered(){
+  const q=(document.getElementById('colab-q')?.value||'').toLowerCase().trim();
   const func=document.getElementById('colab-func')?.value||'';
   const unit=document.getElementById('colab-unit-f')?.value||'';
   const status=document.getElementById('colab-status-f')?.value||'';
-  const colabs=(S.colaboradores||[]).filter(c=>{
-    if(q&&!c.nome.toLowerCase().includes(q)&&!(c.prontuario||'').toLowerCase().includes(q)&&!(c.funcao||'').toLowerCase().includes(q))return false;
-    if(func&&c.funcao!==func)return false;
-    if(unit&&c.unidade&&c.unidade!==unit)return false;
-    if(status&&c.status!==status)return false;
-    return true;
+
+  return (S.colaboradores||[])
+    .filter(c=>{
+      if(q){
+        const nome=(c.nome||'').toLowerCase();
+        const pront=(c.prontuario||'').toLowerCase();
+        const funcao=(c.funcao||'').toLowerCase();
+        if(!nome.includes(q)&&!pront.includes(q)&&!funcao.includes(q))return false;
+      }
+      if(func&&c.funcao!==func)return false;
+      if(unit&&c.unidade&&c.unidade!==unit)return false;
+      if(status&&c.status!==status)return false;
+      return true;
+    })
+    // Ordenar por prontuário numérico; prontuários não numéricos vão ao final em ordem alfabética
+    .sort((a,b)=>{
+      const pa=parseInt(a.prontuario)||Infinity;
+      const pb=parseInt(b.prontuario)||Infinity;
+      if(pa!==pb)return pa-pb;
+      return (a.prontuario||'').localeCompare(b.prontuario||'');
+    });
+}
+
+// Cache de OS indexado por colabId para evitar O(n) por linha
+function buildOSSIndex(){
+  const idx={};
+  (S.oss||[]).forEach(o=>idx[o.colabId]=o);
+  return idx;
+}
+
+function getOSSStatusFast(ossIndex,colabId){
+  const ossRec=ossIndex[colabId];
+  if(!ossRec)return{badge:'b-gray',label:'Sem OS'};
+  if(ossRec.desatualizada)return{badge:'b-amber',label:'Desatualizada'};
+  if(ossRec.entregue)return{badge:'b-green',label:'Entregue'};
+  return{badge:'b-amber',label:'Pendente'};
+}
+
+// Cache simplificado de treinamentos: apenas conta vencidos/a_vencer/validos por colaborador
+// sem recalcular tudo a cada linha — usa resultado já calculado uma vez
+let _treinCache={};
+let _treinCacheKey='';
+
+function buildTreinCache(){
+  // Invalida cache se os dados mudaram
+  const key=(S.treinamentos||[]).length+'_'+(S.treinHistorico||[]).length;
+  if(key===_treinCacheKey)return _treinCache;
+  _treinCache={};_treinCacheKey=key;
+
+  const treinamentos=S.treinamentos||[];
+  if(!treinamentos.length)return _treinCache;
+
+  // Agrupa histórico por colabId+treinId para pegar o mais recente
+  const histMap={};
+  (S.treinHistorico||[]).forEach(h=>{
+    const k=h.colabId+'__'+h.treinId;
+    if(!histMap[k]||h.dataConclusao>histMap[k].dataConclusao)histMap[k]=h;
   });
-  if(!colabs.length){body.innerHTML='<tr><td colspan="10" class="empty">Nenhum colaborador. Importe planilha ou adicione manualmente.</td></tr>';return;}
+
+  const hoje=nowDt();
+  // Pré-calcula validade de cada treinamento
+  const treinValMap={};
+  treinamentos.forEach(tr=>{treinValMap[tr.id]=parseInt(tr.validadeMeses)||12;});
+
+  // Para cada colabId que tem histórico, calcula contadores
+  const colabIds=new Set((S.treinHistorico||[]).map(h=>h.colabId));
+  colabIds.forEach(cid=>{
+    let v=0,av=0,ve=0;
+    treinamentos.forEach(tr=>{
+      const h=histMap[cid+'__'+tr.id];
+      if(!h){return;}// sem registro = ignora no badge
+      const validade=addMonths(h.dataConclusao,treinValMap[tr.id]);
+      const diffD=diffDays(hoje,validade);
+      if(diffD<0)ve++;
+      else if(diffD<=30)av++;
+      else v++;
+    });
+    _treinCache[cid]={validos:v,a_vencer:av,vencidos:ve,total:treinamentos.length};
+  });
+  return _treinCache;
+}
+
+function renderColabs(){
+  const body=document.getElementById('colab-body');
+  const paginEl=document.getElementById('colab-pagination');
+  const counterEl=document.getElementById('colab-counter');
+  if(!body)return;
+
+  _colabFiltered=getColabFiltered();
+  const total=_colabFiltered.length;
+  const perPage=parseInt(document.getElementById('colab-per-page')?.value)||100;
+  const totalPages=Math.max(1,Math.ceil(total/perPage));
+  if(_colabPage>=totalPages)_colabPage=totalPages-1;
+
+  const start=_colabPage*perPage;
+  const end=Math.min(start+perPage,total);
+  const pageColabs=_colabFiltered.slice(start,end);
+
+  if(counterEl)counterEl.textContent=total===0?'Nenhum colaborador encontrado.':`Exibindo ${start+1}–${end} de ${total} colaboradores`;
+
+  if(!total){
+    body.innerHTML='<tr><td colspan="10" class="empty">Nenhum colaborador encontrado.</td></tr>';
+    if(paginEl)paginEl.innerHTML='';
+    return;
+  }
+
   const isAdm=isRoot(S_cu)||S_cu?.p?.isAdmin;
-  body.innerHTML=colabs.map(c=>{
-    const sum=getColabTreinSummary(c.id);const ossInfo=getOSSStatus(c.id);const noUnit=!c.unidade;
-    const treinBadge=sum.total===0?`<span class="badge b-gray">Sem trein.</span>`:sum.vencidos>0?`<span class="badge b-red">${sum.vencidos} Venc.</span>`:sum.a_vencer>0?`<span class="badge b-amber">${sum.a_vencer} A Venc.</span>`:`<span class="badge b-green">✓ OK</span>`;
-    return `<tr>
+  // Pré-constrói índices uma única vez para toda a página
+  const ossIndex=buildOSSIndex();
+  const treinCache=buildTreinCache();
+
+  // Constrói todas as linhas de uma vez com array + join (muito mais rápido que concatenação)
+  const rows=[];
+  for(let i=0;i<pageColabs.length;i++){
+    const c=pageColabs[i];
+    const noUnit=!c.unidade;
+    const ossInfo=getOSSStatusFast(ossIndex,c.id);
+
+    // Badge de treinamento a partir do cache
+    let treinBadge;
+    const tc=treinCache[c.id];
+    if(!tc||(S.treinamentos||[]).length===0){
+      treinBadge='<span class="badge b-gray">—</span>';
+    }else if(tc.vencidos>0){
+      treinBadge=`<span class="badge b-red">${tc.vencidos} Venc.</span>`;
+    }else if(tc.a_vencer>0){
+      treinBadge=`<span class="badge b-amber">${tc.a_vencer} A Venc.</span>`;
+    }else if(tc.validos>0){
+      treinBadge='<span class="badge b-green">✓ OK</span>';
+    }else{
+      treinBadge='<span class="badge b-gray">Sem reg.</span>';
+    }
+
+    const statusBadge=c.status==='ativo'?'b-green':c.status==='afastado'?'b-amber':'b-red';
+
+    rows.push(`<tr>
       <td><span class="mono" style="font-size:11px">${c.prontuario||'—'}</span></td>
       <td class="td-main">${c.nome}${noUnit?'<br><span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--amber);padding:1px 5px;border-radius:3px;font-family:var(--mono)">⚠ sem unidade</span>':''}</td>
-      <td>${c.funcao||'—'}</td><td>${c.setor||'—'}</td>
+      <td>${c.funcao||'—'}</td>
+      <td>${c.setor||'—'}</td>
       <td>${c.unidade||'<span class="badge b-amber">Indefinida</span>'}</td>
       <td><span class="mono" style="font-size:11px">${fmtDt(c.admissao)||'—'}</span></td>
-      <td><span class="badge ${c.status==='ativo'?'b-green':c.status==='afastado'?'b-amber':'b-red'}">${c.status||'ativo'}</span></td>
+      <td><span class="badge ${statusBadge}">${c.status||'ativo'}</span></td>
       <td>${treinBadge}</td>
       <td><span class="badge ${ossInfo.badge}">${ossInfo.label}</span></td>
       <td style="display:flex;gap:4px">
         <button class="btn btn-sm" onclick="openColabDetail('${c.id}')">Ver</button>
         ${isAdm?`<button class="btn btn-sm btn-d" onclick="delColab('${c.id}')">🗑</button>`:''}
-      </td></tr>`;
-  }).join('');
+      </td></tr>`);
+  }
+  body.innerHTML=rows.join('');
+
+  // Renderiza paginação
+  if(paginEl){
+    if(totalPages<=1){paginEl.innerHTML='';return;}
+    const btns=[];
+    const prev=_colabPage>0;
+    const next=_colabPage<totalPages-1;
+    btns.push(`<button class="btn btn-sm" ${!prev?'disabled':''} onclick="colabGoPage(0)">«</button>`);
+    btns.push(`<button class="btn btn-sm" ${!prev?'disabled':''} onclick="colabGoPage(${_colabPage-1})">‹</button>`);
+
+    // Janela de páginas: mostra no máx 7 botões centrados na página atual
+    let pStart=Math.max(0,_colabPage-3);
+    let pEnd=Math.min(totalPages-1,pStart+6);
+    if(pEnd-pStart<6)pStart=Math.max(0,pEnd-6);
+
+    for(let p=pStart;p<=pEnd;p++){
+      btns.push(`<button class="btn btn-sm${p===_colabPage?' btn-p':''}" onclick="colabGoPage(${p})">${p+1}</button>`);
+    }
+    btns.push(`<button class="btn btn-sm" ${!next?'disabled':''} onclick="colabGoPage(${_colabPage+1})">›</button>`);
+    btns.push(`<button class="btn btn-sm" ${!next?'disabled':''} onclick="colabGoPage(${totalPages-1})">»</button>`);
+    btns.push(`<span style="font-size:11px;color:var(--text3);margin-left:4px">Página ${_colabPage+1} de ${totalPages}</span>`);
+    paginEl.innerHTML=btns.join('');
+  }
 }
 
 function openImportColabModal(){
@@ -1550,7 +1726,7 @@ function confirmColabImport(){
     if(existing){existing.nome=row.nome;if(row.funcao)existing.funcao=row.funcao;if(row.admissao)existing.admissao=row.admissao;updated++;}
     else{if(!S.colaboradores)S.colaboradores=[];S.colaboradores.push({id:'c'+Date.now()+Math.random().toString(36).slice(2,6),prontuario:row.prontuario,nome:row.nome,funcao:row.funcao,admissao:row.admissao,setor:'',unidade:'',status:'ativo',sexo:'',obs:''});added++;}
   });
-  closeModal();populateColabFilters();renderColabs();scheduleAutoSave();
+  closeModal();populateColabFilters();_colabPage=0;_treinCacheKey='';renderColabs();scheduleAutoSave();
   toast(`✅ ${added} adicionados, ${updated} atualizados!`,'s');_importPreview=[];
 }
 
@@ -1600,6 +1776,7 @@ function saveColab(eid){
 function delColab(id){
   if(!confirm('Excluir este colaborador? Registros de treinamento e OS serão mantidos como histórico.'))return;
   S.colaboradores=(S.colaboradores||[]).filter(x=>x.id!==id);
+  _treinCacheKey='';// invalida cache
   populateColabFilters();renderColabs();scheduleAutoSave();toast('Excluído','i');
 }
 
@@ -1665,6 +1842,7 @@ function saveTreinHist(colabId,treinId){
   const data=document.getElementById('th-data').value;if(!data){toast('Data obrigatória','e');return;}
   if(!S.treinHistorico)S.treinHistorico=[];
   S.treinHistorico.push({id:'th'+Date.now(),colabId,treinId,dataConclusao:data,obs:document.getElementById('th-obs').value.trim(),registradoPor:S_cu?.id});
+  _treinCacheKey='';// invalida cache de treinamentos
   closeModal();scheduleAutoSave();toast('Registrado!','s');
   if(document.getElementById('v-treinamentos')?.style.display!=='none')renderTreinamentos();
 }
