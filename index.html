@@ -881,13 +881,15 @@ function refreshCurrentView(){
 }
 
 // ============ INIT ============
+const UNIDADES=['A.E.Carvalho','Brás','Itaim','Iguatemi','Imperador','Pinedo','M.Boi Mirim'];
+
 async function init(){
   const timeout=setTimeout(()=>{document.getElementById('loading-screen').style.display='none';document.getElementById('login-screen').style.display='flex';},8000);
   const loaded=await loadFromKV(false);clearTimeout(timeout);
   if(!loaded){
     applyData({
-      cfg:{siteTitle:'SST Manager',sub:'Gestão de Segurança do Trabalho',hdr:'SST Manager',company:'Empresa SST',ftr:'© 2025 SST Manager',ver:'v2.0.0',email:'admin@empresa.com',accent:'#3b82f6',units:['Pinedo','Campo Limpo','Santo André']},
-      users:[{id:'u1',un:'admin',pw:'sesmtvmp',name:'Administrador',turno:'diurno',units:['Pinedo','Campo Limpo','Santo André'],p:{changeSelf:true,changeAll:true,addObs:true,editTask:true,manageTask:true,deleteTask:true,isAdmin:true},active:true}],
+      cfg:{siteTitle:'SST Manager',sub:'Gestão de Segurança do Trabalho',hdr:'SST Manager',company:'SESMT VMP',ftr:'© 2025 SST Manager — SESMT VMP',ver:'v2.0.0',email:'admin@empresa.com',accent:'#3b82f6',units:UNIDADES},
+      users:[{id:'u1',un:'admin',pw:'sesmtvmp',name:'Administrador',turno:'diurno',units:UNIDADES,p:{changeSelf:true,changeAll:true,addObs:true,editTask:true,manageTask:true,deleteTask:true,isAdmin:true},active:true}],
       tasks:[],messages:[],avisos:[],colaboradores:[],treinamentos:[],treinHistorico:[],oss:[],ossHistorico:[],inspecoes:[],desvios:[],extintores:[],hidrantes:[],minhasTarefas:[]
     });
   }
@@ -912,7 +914,7 @@ function doLogin(){
   if(un==='admin'&&pw==='sesmtvmp.reset'){
     // Força o admin padrão independente do que veio do Redis
     const emergencyAdmin={id:'u1',un:'admin',pw:'sesmtvmp',name:'Administrador',turno:'diurno',
-      units:S.cfg.units||[],
+      units:S.cfg.units&&S.cfg.units.length?S.cfg.units:UNIDADES,
       p:{changeSelf:true,changeAll:true,addObs:true,editTask:true,manageTask:true,deleteTask:true,isAdmin:true},active:true};
     // Garante que este admin existe no state atual
     const idx=(S.users||[]).findIndex(x=>x.un==='admin');
