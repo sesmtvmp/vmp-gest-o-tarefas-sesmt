@@ -2550,14 +2550,25 @@ function delOSSHistItemFromColab(histId,colabId){
 function delOSSHistAllFromColab(colabId){
   const col=(S.colaboradores||[]).find(x=>x.id===colabId);
   if(!confirm(`Excluir TODO o histórico de OS de ${col?.nome||'este colaborador'}?`))return;
+  // Remove histórico
   S.ossHistorico=(S.ossHistorico||[]).filter(x=>x.colabId!==colabId);
   // Reseta o registro atual de OS para pendente
   const idx=(S.oss||[]).findIndex(x=>x.colabId===colabId);
   if(idx>=0){
     S.oss[idx]={id:S.oss[idx].id,colabId,dataAtualizacao:'',dataEntrega:'',entregue:false,desatualizada:false,obs:''};
+  } else {
+    // Se não existe registro, cria um vazio
+    if(!S.oss)S.oss=[];
+    S.oss.push({id:'oss'+Date.now(),colabId,dataAtualizacao:'',dataEntrega:'',entregue:false,desatualizada:false,obs:''});
   }
-  scheduleAutoSave();toast('Histórico excluído — OS resetada para Pendente','i');
-  openColabDetail(colabId); // volta para o detalhe atualizado
+  // Salva IMEDIATAMENTE (sem delay) para evitar que o polling traga dados antigos
+  saveToKV().then(()=>{
+    toast('Histórico excluído — OS resetada para Pendente','s');
+    openColabDetail(colabId);
+  }).catch(()=>{
+    toast('Histórico excluído — OS resetada para Pendente','i');
+    openColabDetail(colabId);
+  });
 }
 
 function openAddTreinHistModal(colabId,treinId){
@@ -2857,12 +2868,21 @@ function delOSSHistAll(colabId){
   if(!confirm(`Excluir TODO o histórico de OS de ${col?.nome||'este colaborador'}?`))return;
   // Remove histórico
   S.ossHistorico=(S.ossHistorico||[]).filter(x=>x.colabId!==colabId);
-  // Reseta o registro atual de OS para "pendente" (sem entrega, sem desatualizada)
+  // Reseta o registro atual de OS para "pendente"
   const idx=(S.oss||[]).findIndex(x=>x.colabId===colabId);
   if(idx>=0){
     S.oss[idx]={id:S.oss[idx].id,colabId,dataAtualizacao:'',dataEntrega:'',entregue:false,desatualizada:false,obs:''};
+  } else {
+    if(!S.oss)S.oss=[];
+    S.oss.push({id:'oss'+Date.now(),colabId,dataAtualizacao:'',dataEntrega:'',entregue:false,desatualizada:false,obs:''});
   }
-  closeModal();renderOSS();scheduleAutoSave();toast('Histórico excluído — OS resetada para Pendente','i');
+  // Salva imediatamente para evitar que o polling traga dados antigos do Redis
+  closeModal();
+  saveToKV().then(()=>{
+    renderOSS();toast('Histórico excluído — OS resetada para Pendente','s');
+  }).catch(()=>{
+    renderOSS();toast('Histórico excluído — OS resetada para Pendente','i');
+  });
 }
 function openOSSEditModal(colabId){
   const c=(S.colaboradores||[]).find(x=>x.id===colabId);
