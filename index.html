@@ -452,6 +452,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
           <button class="btn btn-sm" onclick="marcarTodosLidos()" style="font-size:11px">✓ Marcar todos como lidos</button>
           <button class="btn btn-sm btn-d" id="btn-del-avisos-sel" style="display:none;font-size:11px" onclick="delAvisosSelecionados()">🗑 Excluir selecionados</button>
           <button class="btn btn-sm btn-d" id="btn-del-todos-avisos" style="display:none;font-size:11px" onclick="delTodosAvisos()">🗑 Excluir todos</button>
+          <button class="btn btn-sm" id="btn-fix-avisos" style="display:none;font-size:11px" onclick="fixarAvisosLegados()" title="Corrige avisos antigos que não aparecem para usuários">🔧 Corrigir avisos</button>
         </div>
         <div id="avisos-list"></div>
       </div>
@@ -1769,17 +1770,25 @@ function updateAvisosBadge(){
     if((a.readBy||[]).includes(S_cu?.id))return false;
     return podeVerAviso(a);
   }).length;
-  const el=document.getElementById('sc-avisos');if(el)el.textContent=unread;
+  const el=document.getElementById('sc-avisos');
+  if(el)el.textContent=unread||'';
 }
 
 function podeVerAviso(a){
   const cu=S_cu;if(!cu)return false;
   const isAdm=isRoot(cu)||cu.p?.isAdmin;
-  // Avisos do sistema com destinatário específico
-  if(a.isSistema&&a.paraUid){
-    return a.paraUid===cu.id||isAdm;
+
+  // Só considera isSistema se o campo for explicitamente true
+  // Avisos criados via "Novo Aviso" não têm isSistema — visíveis para todos
+  if(a.isSistema===true){
+    if(a.paraUid){
+      return a.paraUid===cu.id||isAdm;
+    }
+    // isSistema sem paraUid = notificação interna de admin, só admins veem
+    return isAdm;
   }
-  // Avisos publicados por admins — visíveis para todos
+
+  // Aviso manual (sem isSistema, ou isSistema=false/undefined) → todos veem
   return true;
 }
 function marcarTodosLidos(){
@@ -1795,7 +1804,9 @@ function renderAvisos(){
   const btnSel=document.getElementById('btn-del-avisos-sel');
   const btnTodos=document.getElementById('btn-del-todos-avisos');
   if(btnTodos)btnTodos.style.display=isAdm&&avFilt.length?'inline-flex':'none';
-  if(btnSel)btnSel.style.display='none'; // aparece só quando há seleção
+  if(btnSel)btnSel.style.display='none';
+  const btnFix=document.getElementById('btn-fix-avisos');
+  if(btnFix)btnFix.style.display=isAdm?'inline-flex':'none';
   if(!avFilt.length){el.innerHTML='<div class="empty">Nenhum aviso.</div>';return;}
   el.innerHTML=avFilt.map(a=>{
     const unread=!(a.readBy||[]).includes(S_cu?.id);
@@ -1859,9 +1870,31 @@ function reenviarAvisoPopup(id){
   a.popupVisto=[];
   a.readBy=[];
   a.exibirPopup=true;
+  // Garante que não está marcado como sistema
+  delete a.isSistema;
   scheduleAutoSave();
   renderAvisos();updateAvisosBadge();
   toast('Aviso reenviado — todos os usuários verão o popup na próxima entrada','s');
+}
+
+// Corrige avisos antigos que foram salvos com isSistema incorreto
+function fixarAvisosLegados(){
+  let fixed=0;
+  (S.avisos||[]).forEach(a=>{
+    // Se tem título e corpo e isSistema=true mas não tem paraUid → era aviso manual, corrigir
+    if(a.isSistema===true && !a.paraUid && a.title && a.body){
+      delete a.isSistema;
+      a.popupVisto=[];
+      fixed++;
+    }
+  });
+  if(fixed>0){
+    scheduleAutoSave();
+    renderAvisos();updateAvisosBadge();
+    toast(`${fixed} aviso(s) corrigido(s) — usuários verão o popup na próxima entrada`,'s');
+  } else {
+    toast('Nenhum aviso precisou de correção','i');
+  }
 }
 function openNewAvisoModal(){
   if(!isRoot(S_cu)&&!S_cu?.p?.isAdmin){toast('Sem permissão','e');return;}
