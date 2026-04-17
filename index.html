@@ -1227,6 +1227,7 @@ function appendCard(t,colK){
       <span class="badge ${t.prio==='alta'?'b-red':t.prio==='media'?'b-amber':'b-green'}">${t.prio}</span>
       <span class="badge b-gray">${t.unit}</span>
       ${isJ?'<span class="badge b-purple">🤝 Conjunta</span>':''}
+      ${t.recorrente?'<span class="badge b-blue">🔁 Recorrente</span>':''}
     </div>
     <div class="tc-foot">
       <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)">
@@ -1415,6 +1416,15 @@ function openTaskModal(defaultCol,eid){
         <option value="revisao" ${t.status==='revisao'?'selected':''}>Em Revisão</option>
         <option value="concluido" ${t.status==='concluido'?'selected':''}>Concluído</option>
       </select></div>
+      <div class="fg" style="margin-top:4px">
+        <label class="cb-item" style="font-size:12px;gap:8px">
+          <input type="checkbox" id="tk-recorrente" ${t.recorrente?'checked':''} style="accent-color:var(--accent);width:15px;height:15px">
+          <div>
+            <div style="font-weight:500">🔁 Tarefa recorrente anual</div>
+            <div style="font-size:10px;color:var(--text3)">Ao concluir, solicita o próximo prazo e recria automaticamente</div>
+          </div>
+        </label>
+      </div>
     </div>
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTask('${eid}','')">💾 Salvar</button></div>`,true);
     return;
@@ -1461,6 +1471,15 @@ function openTaskModal(defaultCol,eid){
     <div class="fgrid">
       <div class="fg"><label class="flbl">Início</label><input class="finput" type="date" id="tk-start" value="${nowDt()}"></div>
       <div class="fg"><label class="flbl">Prazo *</label><input class="finput" type="date" id="tk-due"></div>
+    </div>
+    <div class="fg" style="margin-top:4px">
+      <label class="cb-item" style="font-size:12px;gap:8px">
+        <input type="checkbox" id="tk-recorrente" style="accent-color:var(--accent);width:15px;height:15px">
+        <div>
+          <div style="font-weight:500">🔁 Tarefa recorrente anual</div>
+          <div style="font-size:10px;color:var(--text3)">Ao concluir, o responsável informará o próximo prazo e a tarefa será criada automaticamente</div>
+        </div>
+      </label>
     </div>
     <div class="sep"></div>
     <div class="fg">
@@ -1531,6 +1550,7 @@ function saveTask(eid,defaultCol){
       t.prio=document.getElementById('tk-prio').value;
       t.start=document.getElementById('tk-start').value;
       t.due=due;
+      t.recorrente=document.getElementById('tk-recorrente')?.checked||false;
       if(document.getElementById('tk-status'))t.status=document.getElementById('tk-status').value;
     }
     closeModal();renderKanban();
@@ -1565,6 +1585,7 @@ function saveTask(eid,defaultCol){
     start:document.getElementById('tk-start').value,
     due,
     status:defaultCol||'pendente',
+    recorrente:document.getElementById('tk-recorrente')?.checked||false,
     obs:[]
   };
 
@@ -1616,6 +1637,7 @@ function openDetail(id){
       <span class="badge b-gray">${t.unit}</span>
       <span class="badge b-gray">${t.turno==='conjunto'?'🌞🌙':t.turno==='noturno'?'🌙 Noturno':'🌞 Diurno'}</span>
       ${ov?'<span class="badge b-red">⚠ Vencida</span>':''}
+      ${t.recorrente?'<span class="badge b-blue">🔁 Recorrente anual</span>':''}
     </div>
     ${t.desc?`<p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">${t.desc}</p>`:''}
     <div style="font-size:12px;color:var(--text3);margin-bottom:14px">👤 ${u.name} · 📅 ${fmtD(t.start)} → ${fmtD(t.due)}</div>
@@ -1630,11 +1652,78 @@ function openDetail(id){
 function changeStatus(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
   const prevStatus=t.status;
-  t.status=document.getElementById('det-status').value;
+  const newStatus=document.getElementById('det-status').value;
+
+  // Se é tarefa recorrente sendo concluída, pede o próximo prazo
+  if(newStatus==='concluido'&&t.recorrente&&prevStatus!=='concluido'){
+    closeModal();
+    _pendingConcluirId=id;
+    // Calcula sugestão: 1 ano a partir do prazo atual
+    const sugestao=t.due?addMonths(t.due,12):addMonths(nowDt(),12);
+    showModal(`<div class="modal-hdr"><div class="modal-ttl">🔁 Tarefa Recorrente Concluída</div><button class="ib" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="alert alert-ok" style="margin-bottom:12px">✅ "<strong>${t.title}</strong>" será marcada como concluída.</div>
+      <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:var(--r);padding:12px;margin-bottom:14px;font-size:12px">
+        🔁 Esta é uma <strong>tarefa recorrente anual</strong>. Informe o prazo da próxima ocorrência para criá-la automaticamente.
+      </div>
+      <div class="fg"><label class="flbl">Prazo da próxima ocorrência *</label>
+        <input class="finput" type="date" id="prox-due" value="${sugestao}">
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">Sugestão: 1 ano a partir do prazo atual</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-p" onclick="confirmarConcluirRecorrente()">✅ Concluir e agendar próxima</button>
+    </div>`);
+    return;
+  }
+
+  t.status=newStatus;
   if(!isRoot(S_cu)&&!S_cu?.p?.isAdmin&&prevStatus!==t.status){
     criarAvisoSistema(null,`🔄 ${S_cu.name} alterou status de "${t.title}": ${slbl(prevStatus)} → ${slbl(t.status)}`);
   }
   closeModal();renderKanban();renderList();updateCounts();scheduleAutoSave();toast('Status atualizado','s');
+}
+
+let _pendingConcluirId=null;
+
+function confirmarConcluirRecorrente(){
+  const proxDue=document.getElementById('prox-due')?.value;
+  if(!proxDue){toast('Informe o prazo da próxima ocorrência','e');return;}
+  const t=S.tasks.find(x=>x.id===_pendingConcluirId);
+  if(!t){closeModal();return;}
+
+  const prevStatus=t.status;
+  // Conclui a tarefa atual
+  t.status='concluido';
+  if(!isRoot(S_cu)&&!S_cu?.p?.isAdmin){
+    criarAvisoSistema(null,`🔄 ${S_cu.name} concluiu "${t.title}" (recorrente)`);
+  }
+
+  // Cria a próxima ocorrência
+  const novaTarefa={
+    id:'t'+Date.now()+S_cu.id,
+    title:t.title,
+    desc:t.desc,
+    uid:t.uid,
+    unit:t.unit,
+    turno:t.turno,
+    prio:t.prio,
+    start:nowDt(),
+    due:proxDue,
+    status:'pendente',
+    recorrente:true,
+    recorrenteOrigemId:t.id,
+    obs:[]
+  };
+  S.tasks.push(novaTarefa);
+
+  // Notifica o responsável
+  criarAvisoSistema(t.uid,`🔁 Nova ocorrência de "${t.title}" criada automaticamente · Prazo: ${fmtD(proxDue)}`);
+
+  _pendingConcluirId=null;
+  closeModal();renderKanban();renderList();updateCounts();scheduleAutoSave();
+  toast(`✅ Tarefa concluída! Próxima ocorrência criada para ${fmtD(proxDue)}`,'s');
 }
 
 function addObs(id){
@@ -2454,10 +2543,18 @@ function showTreinHist(colabId,treinId){
   closeModal();
   showModal(`<div class="modal-hdr"><div class="modal-ttl">Histórico: ${tr?.nome||''}</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
-    <div class="tw"><table class="dt"><thead><tr><th>DATA</th><th>STATUS</th><th>OBS</th></tr></thead>
-    <tbody>${hist.map((h,i)=>{const st=i===0?getTreinStatus(treinId,colabId):{status:'historico',badge:'b-gray',label:'Histórico'};
-      return `<tr><td class="mono">${fmtDt(h.dataConclusao)}</td><td><span class="badge ${st.badge}">${st.label}</span></td><td style="font-size:11px;color:var(--text3)">${h.obs||'—'}</td></tr>`;
-    }).join('')}</tbody></table></div>
+    ${hist.length>0?`<div style="text-align:right;margin-bottom:8px">
+      <button class="btn btn-sm btn-d" onclick="delTreinHistAll('${colabId}','${treinId}')">🗑 Excluir todo o histórico</button>
+    </div>`:''}
+    <div class="tw"><table class="dt"><thead><tr><th>DATA</th><th>STATUS</th><th>OBS</th><th>AÇÃO</th></tr></thead>
+    <tbody>${hist.length?hist.map((h,i)=>{const st=i===0?getTreinStatus(treinId,colabId):{status:'historico',badge:'b-gray',label:'Histórico'};
+      return `<tr>
+        <td class="mono">${fmtDt(h.dataConclusao)}</td>
+        <td><span class="badge ${st.badge}">${st.label}</span></td>
+        <td style="font-size:11px;color:var(--text3)">${h.obs||'—'}</td>
+        <td><button class="btn btn-sm btn-d" onclick="delTreinHist('${h.id}','${colabId}','${treinId}')">🗑</button></td>
+      </tr>`;
+    }).join(''):'<tr><td colspan="4" class="empty">Sem histórico.</td></tr>'}</tbody></table></div>
   </div>`);
 }
 
@@ -2467,6 +2564,17 @@ function delTreinHist(histId,colabId,treinId){
   _treinCacheKey='';
   showTreinHist(colabId,treinId);
   scheduleAutoSave();toast('Registro excluído','i');
+}
+
+function delTreinHistAll(colabId,treinId){
+  const tr=(S.treinamentos||[]).find(x=>x.id===treinId);
+  if(!confirm(`Excluir TODO o histórico de "${tr?.nome||'este treinamento'}"?`))return;
+  S.treinHistorico=(S.treinHistorico||[]).filter(x=>!(x.colabId===colabId&&x.treinId===treinId));
+  _treinCacheKey='';
+  closeModal();
+  // Re-abre para mostrar vazio
+  showTreinHist(colabId,treinId);
+  scheduleAutoSave();toast('Histórico do treinamento excluído','i');
 }
 
 // ============ TREINAMENTOS ============
@@ -2700,12 +2808,16 @@ function delOSSHistItem(histId,colabId){
   scheduleAutoSave();toast('Registro excluído','i');
 }
 function delOSSHistAll(colabId){
-  const c=(S.colaboradores||[]).find(x=>x.id===colabId);
-  if(!confirm(`Excluir TODO o histórico de OS de ${c?.nome||'este colaborador'}?`))return;
+  const col=(S.colaboradores||[]).find(x=>x.id===colabId);
+  if(!confirm(`Excluir TODO o histórico de OS de ${col?.nome||'este colaborador'}?`))return;
+  // Remove histórico
   S.ossHistorico=(S.ossHistorico||[]).filter(x=>x.colabId!==colabId);
-  // Também remove o registro atual de OS
-  S.oss=(S.oss||[]).filter(x=>x.colabId!==colabId);
-  closeModal();renderOSS();scheduleAutoSave();toast('Histórico excluído','i');
+  // Reseta o registro atual de OS para "pendente" (sem entrega, sem desatualizada)
+  const idx=(S.oss||[]).findIndex(x=>x.colabId===colabId);
+  if(idx>=0){
+    S.oss[idx]={id:S.oss[idx].id,colabId,dataAtualizacao:'',dataEntrega:'',entregue:false,desatualizada:false,obs:''};
+  }
+  closeModal();renderOSS();scheduleAutoSave();toast('Histórico excluído — OS resetada para Pendente','i');
 }
 function openOSSEditModal(colabId){
   const c=(S.colaboradores||[]).find(x=>x.id===colabId);
