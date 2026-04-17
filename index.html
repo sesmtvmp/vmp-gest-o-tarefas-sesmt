@@ -338,14 +338,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
         <div class="nav-item" id="n-cfg" onclick="setView('cfg')">⚙️ Configurações</div>
         <div class="nav-item" id="n-github" onclick="setView('github')">🔄 Sync / KV</div>
       </div>
-      <!-- FILTROS TAREFA -->
-      <div class="sb-section">
-        <div class="sb-lbl">Filtrar Tarefas</div>
-        <div class="nav-item" onclick="setQF('atrasado')"><span style="color:var(--red)">●</span> Atrasadas<span class="sc hot" id="sc-at">0</span></div>
-        <div class="nav-item" onclick="setQF('andamento')"><span style="color:var(--amber)">●</span> Em andamento<span class="sc" id="sc-and">0</span></div>
-        <div class="nav-item" onclick="setQF('revisao')"><span style="color:var(--purple)">●</span> Em revisão<span class="sc" id="sc-rev">0</span></div>
-        <div class="nav-item" onclick="setQF(null)"><span style="color:var(--text3)">●</span> Todas</div>
-      </div>
+
       <div class="sb-bottom">
         <div class="mini-g">
           <div class="mini-c"><div class="mini-v" id="sb-tot">0</div><div class="mini-l">Ativas</div></div>
@@ -651,17 +644,14 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
                   <span style="font-size:12px;flex:1">⚠️ Desvios e Incidentes</span>
                   <button class="btn btn-sm btn-p" onclick="gerarRelatorio('desvios')">Gerar</button>
                 </div>
-                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
-                  <span style="font-size:12px;flex:1">🧯 Extintores e Hidrantes (juntos)</span>
-                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('extintores')">Gerar</button>
-                </div>
-                <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0;border-bottom:1px solid var(--border)">
-                  <span style="font-size:12px;flex:1">🧯 Apenas Extintores</span>
-                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('so_extintores')">Gerar</button>
-                </div>
                 <div class="status-row" style="display:flex;align-items:center;gap:7px;padding:8px 0">
-                  <span style="font-size:12px;flex:1">💧 Apenas Hidrantes</span>
-                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio('so_hidrantes')">Gerar</button>
+                  <span style="font-size:12px;flex:1">🧯 Extintores / Hidrantes</span>
+                  <select class="fi" id="rel-ext-tipo" style="width:160px">
+                    <option value="extintores">Extintores e Hidrantes</option>
+                    <option value="so_extintores">Apenas Extintores</option>
+                    <option value="so_hidrantes">Apenas Hidrantes</option>
+                  </select>
+                  <button class="btn btn-sm btn-p" onclick="gerarRelatorio(document.getElementById('rel-ext-tipo').value)">Gerar</button>
                 </div>
               </div>
             </div>
@@ -766,6 +756,17 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
 <script>
 // ============ CONSTANTS ============
 const COLS=[{k:'pendente',l:'Pendente',c:'#64748b'},{k:'andamento',l:'Em Andamento',c:'#f59e0b'},{k:'revisao',l:'Em Revisão',c:'#a855f7'}];
+// Retorna se uma tarefa deve ser mostrada como "atrasada" (prazo vencido e não está em revisão nem concluída)
+function isAtrasada(t){
+  if(!t||t.status==='concluido'||t.status==='revisao')return false;
+  return overdue(t);
+}
+// Retorna o status "visual" de uma tarefa (considera atrasada como override)
+function getTaskStatusVisual(t){
+  if(isAtrasada(t))return{k:'atrasada',l:'Atrasada',c:'#ef4444'};
+  const col=COLS.find(col=>col.k===t.status)||COLS[0];
+  return col;
+}
 const PL={changeSelf:'Alterar próprio status',changeAll:'Alterar qualquer status',addObs:'Adicionar observações',editTask:'Editar tarefas',manageTask:'Criar/replicar tarefas',deleteTask:'Excluir tarefas',isAdmin:'Administrador'};
 const ROOT_UN='admin';
 const MSG_TYPES=['Solicitação','Sugestão','Crítica','Dúvida','Outro'];
@@ -1182,12 +1183,22 @@ function delSelectedTasks(){
 function renderKanban(){
   const b=document.getElementById('kboard');b.innerHTML='';
   const ft=getFT();
+  const canManage=(S_cu.p.manageTask||S_cu.p.isAdmin||isRoot(S_cu));
+
+  // Coluna de atrasadas (tarefas com prazo vencido que não estão em revisão/concluído)
+  const atrasadas=ft.filter(t=>isAtrasada(t));
+  const dAt=document.createElement('div');dAt.className='kb-col';dAt.dataset.col='atrasada';
+  dAt.innerHTML=`<div class="kb-hdr"><div class="col-dot" style="background:#ef4444"></div><span class="col-ttl">⚠ Atrasada</span><span class="col-n" style="background:#ef4444;color:#fff">${atrasadas.length}</span></div>
+  <div class="kb-body" id="kb-atrasada"></div>`;
+  b.appendChild(dAt);atrasadas.forEach(t=>appendCard(t,'atrasada'));
+
+  // Colunas normais — excluindo tarefas atrasadas
   COLS.forEach(col=>{
-    const items=ft.filter(t=>t.status===col.k);
+    const items=ft.filter(t=>t.status===col.k&&!isAtrasada(t));
     const d=document.createElement('div');d.className='kb-col';d.dataset.col=col.k;
     d.innerHTML=`<div class="kb-hdr"><div class="col-dot" style="background:${col.c}"></div><span class="col-ttl">${col.l}</span><span class="col-n">${items.length}</span></div>
     <div class="kb-body" id="kb-${col.k}" ondragover="event.preventDefault()" ondrop="onDrop(event,'${col.k}')"></div>
-    ${(S_cu.p.manageTask||S_cu.p.isAdmin||isRoot(S_cu))?`<button class="add-btn" onclick="openTaskModal('${col.k}')">+ Adicionar tarefa</button>`:''}`;
+    ${canManage?`<button class="add-btn" onclick="openTaskModal('${col.k}')">+ Adicionar tarefa</button>`:''}`;
     b.appendChild(d);items.forEach(t=>appendCard(t,col.k));
   });
   updateCounts();
@@ -1209,7 +1220,7 @@ function appendCard(t,colK){
     <div class="tc-title">${t.title}</div>
     ${t.desc?`<div class="tc-desc">${t.desc}</div>`:''}
     <div class="tc-meta">
-      <span class="badge ${ov?'b-red':'b-gray'}">${ov?'⚠ Vencida':'📅 '+fmtD(t.due)}</span>
+      <span class="badge ${isAtrasada(t)?'b-red':'b-gray'}">${isAtrasada(t)?'⚠ Atrasada':'📅 '+fmtD(t.due)}</span>
       ${t.start?`<span class="badge b-gray">🗓 ${fmtD(t.start)}</span>`:''}
       <span class="badge ${t.prio==='alta'?'b-red':t.prio==='media'?'b-amber':'b-green'}">${t.prio}</span>
       <span class="badge b-gray">${t.unit}</span>
@@ -1270,7 +1281,7 @@ function renderList(){
       <td>${u.name.split(' ')[0]}</td><td>${t.unit}</td>
       <td>${t.turno==='conjunto'?'🌞🌙':t.turno==='noturno'?'🌙 Not.':'🌞 Diu.'}</td>
       <td><span class="mono" style="font-size:11px">${fmtD(t.start)}</span></td>
-      <td><span class="mono" style="font-size:11px;color:${ov?'var(--red)':''}">${ov?'⚠ ':''}${fmtD(t.due)}</span></td>
+      <td><span class="mono" style="font-size:11px;color:${isAtrasada(t)?'var(--red)':''}">${isAtrasada(t)?'⚠ Atrasada — ':''}${fmtD(t.due)}</span></td>
       <td><span class="badge ${scol(t.status)}">${slbl(t.status)}</span></td>
       <td><span class="badge ${t.prio==='alta'?'b-red':t.prio==='media'?'b-amber':'b-green'}">${t.prio}</span></td>
       <td style="display:flex;gap:4px">
@@ -1839,11 +1850,20 @@ function checkDeadlineAlerts(){
 
 // ============ SST UTILS ============
 function getTreinStatus(treinId,colabId){
+  const trein=(S.treinamentos||[]).find(t=>t.id===treinId);
   const hist=(S.treinHistorico||[]).filter(h=>h.colabId===colabId&&h.treinId===treinId);
-  if(!hist.length)return{status:'sem_registro',badge:'b-gray',label:'Sem Registro',validade:null};
+  if(!hist.length){
+    // Sem registro: verifica se a função do colaborador é obrigatória para este treinamento
+    if(trein&&trein.funcoesObrigatorias&&trein.funcoesObrigatorias.length>0){
+      const colab=(S.colaboradores||[]).find(x=>x.id===colabId);
+      if(colab&&trein.funcoesObrigatorias.includes(colab.funcao)){
+        return{status:'vencido',badge:'b-red',label:'Vencido (Obrig.)',validade:null,last:null};
+      }
+    }
+    return{status:'sem_registro',badge:'b-gray',label:'Sem Registro',validade:null};
+  }
   hist.sort((a,b)=>b.dataConclusao.localeCompare(a.dataConclusao));
   const last=hist[0];
-  const trein=(S.treinamentos||[]).find(t=>t.id===treinId);
   if(!trein)return{status:'sem_registro',badge:'b-gray',label:'Sem Registro',validade:null};
   const valMeses=parseInt(trein.validadeMeses)||12;
   const validade=addMonths(last.dataConclusao,valMeses);
@@ -1874,13 +1894,14 @@ function renderDashboard(){
   const el=document.getElementById('dash-content');if(!el)return;
   const unit=document.getElementById('dash-unit')?.value||'';
   const colabs=(S.colaboradores||[]).filter(c=>c.status==='ativo'&&(!unit||c.unidade===unit)&&(!c.unidade||canSeeUnit(c.unidade)));
+  const afastados=(S.colaboradores||[]).filter(c=>c.status==='afastado'&&(!unit||c.unidade===unit)&&(!c.unidade||canSeeUnit(c.unidade)));
   let totalValid=0,totalAvencer=0,totalVencido=0;
   colabs.forEach(c=>{const sum=getColabTreinSummary(c.id);totalValid+=sum.validos;totalAvencer+=sum.a_vencer;totalVencido+=sum.vencidos;});
   const visColabs=new Set(colabs.map(c=>c.id));
   const ossDesat=(S.oss||[]).filter(o=>o.desatualizada&&visColabs.has(o.colabId)).length;
   const inspAtrasado=(S.inspecoes||[]).filter(i=>i.status==='atrasado').length;
   const hoje=nowDt();
-  const extVencidos=(S.extintores||[]).filter(e=>e.proxRecarga&&e.proxRecarga<hoje).length;
+  const extVencidos=(S.extintores||[]).filter(e=>e.proxRecarga&&e.proxRecarga<hoje&&canSeeUnit(e.unidade)&&(!unit||e.unidade===unit)).length;
   const total=totalValid+totalAvencer+totalVencido;
   el.innerHTML=`
   <div class="stats-grid">
@@ -1895,6 +1916,7 @@ function renderDashboard(){
   </div>
   ${extVencidos>0?`<div class="alert alert-danger">⚠ <strong>${extVencidos} extintor(es) VENCIDO(s)</strong> — Providenciar manutenção imediatamente!</div>`:''}
   ${inspAtrasado>0?`<div class="alert alert-warn">⚠ <strong>${inspAtrasado} inspeção(ões) ATRASADA(s)</strong> — Veja a aba de Inspeções.</div>`:''}
+  ${afastados.length>0?`<div class="alert" style="background:rgba(99,102,241,.12);border-color:rgba(99,102,241,.3)">📋 <strong>${afastados.length} colaborador(es) afastado(s)</strong> — <button class="btn btn-sm" onclick="setView('colaboradores');document.getElementById('colab-status-f').value='afastado';colabResetPage()">Verificar afastados</button></div>`:''}
   <div class="g2">
     <div class="card">
       <div class="card-head"><div class="card-title">Cobertura de Treinamentos</div></div>
@@ -2437,6 +2459,14 @@ function showTreinHist(colabId,treinId){
   </div>`);
 }
 
+function delTreinHist(histId,colabId,treinId){
+  if(!confirm('Excluir este registro do histórico?'))return;
+  S.treinHistorico=(S.treinHistorico||[]).filter(x=>x.id!==histId);
+  _treinCacheKey='';
+  showTreinHist(colabId,treinId);
+  scheduleAutoSave();toast('Registro excluído','i');
+}
+
 // ============ TREINAMENTOS ============
 function renderTreinamentos(){
   const unit=document.getElementById('trein-unit-f')?.value||'';
@@ -2494,6 +2524,8 @@ function renderTreinamentos(){
 function openTreinModal(eid){
   const t=eid?(S.treinamentos||[]).find(x=>x.id===eid):null;
   const nextNum=`T-${String((S.treinamentos||[]).length+1).padStart(2,'0')}`;
+  const funcs=[...new Set((S.colaboradores||[]).map(c=>c.funcao).filter(Boolean))].sort();
+  const obrigFuncs=t?.funcoesObrigatorias||[];
   showModal(`<div class="modal-hdr"><div class="modal-ttl">${t?'Editar':'Cadastrar'} Treinamento</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
     <div class="fgrid">
@@ -2502,8 +2534,25 @@ function openTreinModal(eid){
     </div>
     <div class="fg"><label class="flbl">Nome do Treinamento *</label><input class="finput" id="tr-nome" value="${t?.nome||''}"></div>
     <div class="fg"><label class="flbl">Validade em meses *</label><input class="finput" type="number" id="tr-val" value="${t?.validadeMeses||12}" min="1"></div>
+    <div class="sep"></div>
+    <div class="fg">
+      <label class="flbl">📋 Funções Obrigatórias
+        <span style="font-size:10px;color:var(--text3);font-weight:400"> — colaboradores destas funções sem registro aparecem como vencido</span>
+      </label>
+      <input class="finput" id="tr-obrig-q" placeholder="🔍 Filtrar funções..." oninput="filtrarFuncoesObrig()" style="margin:6px 0 6px">
+      <div class="cb-g" id="tr-obrig-funcs" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);padding:4px 8px">
+        ${funcs.length?funcs.map(f=>`<label class="cb-item tr-obrig-item"><input type="checkbox" value="${f}" ${obrigFuncs.includes(f)?'checked':''}> ${f}</label>`).join(''):'<span style="font-size:12px;color:var(--text3)">Nenhuma função cadastrada.</span>'}
+      </div>
+    </div>
   </div>
-  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTrein('${eid||''}')">💾 Salvar</button></div>`);
+  <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="saveTrein('${eid||''}')">💾 Salvar</button></div>`,true);
+}
+
+function filtrarFuncoesObrig(){
+  const q=(document.getElementById('tr-obrig-q')?.value||'').toLowerCase();
+  document.querySelectorAll('.tr-obrig-item').forEach(el=>{
+    el.style.display=!q||el.textContent.toLowerCase().includes(q)?'':'none';
+  });
 }
 
 function saveTrein(eid){
@@ -2513,8 +2562,9 @@ function saveTrein(eid){
   const dup=(S.treinamentos||[]).find(t=>t.codigo===codigo&&t.id!==eid);
   if(dup){toast('Código já existe','e');return;}
   if(!S.treinamentos)S.treinamentos=[];
-  if(eid){Object.assign(S.treinamentos.find(x=>x.id===eid)||{},{codigo,nome,norma:document.getElementById('tr-norm').value.trim(),validadeMeses});}
-  else{S.treinamentos.push({id:'tr'+Date.now(),codigo,nome,norma:document.getElementById('tr-norm').value.trim(),validadeMeses});}
+  const funcoesObrigatorias=[...document.querySelectorAll('#tr-obrig-funcs input:checked')].map(i=>i.value);
+  if(eid){Object.assign(S.treinamentos.find(x=>x.id===eid)||{},{codigo,nome,norma:document.getElementById('tr-norm').value.trim(),validadeMeses,funcoesObrigatorias});}
+  else{S.treinamentos.push({id:'tr'+Date.now(),codigo,nome,norma:document.getElementById('tr-norm').value.trim(),validadeMeses,funcoesObrigatorias});}
   closeModal();renderTreinamentos();scheduleAutoSave();toast(eid?'Atualizado!':'Cadastrado!','s');
 }
 
@@ -2538,7 +2588,7 @@ function getOSSFiltered(){
   const ossIdx=buildOSSIndex();
   return (S.colaboradores||[])
     .filter(c=>{
-      if(c.status==='demitido')return false;
+      if(c.status==='demitido'||c.status==='afastado')return false;
       // Colaboradores sem unidade aparecem para todos; com unidade só para quem tem acesso
       if(c.unidade&&!canSeeUnit(c.unidade))return false;
       if(q&&!(c.prontuario||'').toLowerCase().includes(q)&&!c.nome.toLowerCase().includes(q))return false;
@@ -2570,7 +2620,8 @@ function renderOSS(){
   const ossIdx=buildOSSIndex();
   const allColabs=getOSSFiltered();
   const total=allColabs.length;
-  const allActive=(S.colaboradores||[]).filter(c=>c.status!=='demitido'&&(!c.unidade||canSeeUnit(c.unidade)));
+  // Apenas ativos — demitidos e afastados não contam para OS
+  const allActive=(S.colaboradores||[]).filter(c=>c.status==='ativo'&&(!c.unidade||canSeeUnit(c.unidade)));
   const entregue=allActive.filter(c=>{const o=ossIdx[c.id];return o&&o.entregue&&!o.desatualizada;}).length;
   const pendente=allActive.filter(c=>{const o=ossIdx[c.id];return !o||(!o.entregue&&!o.desatualizada);}).length;
   const desatualizada=allActive.filter(c=>{const o=ossIdx[c.id];return o&&o.desatualizada;}).length;
@@ -3034,10 +3085,7 @@ function openExtModal(eid){
       <div class="fg"><label class="flbl">Unidade</label><select class="fsel" id="ex-unit">${(S.cfg.units||[]).map(u=>`<option value="${u}" ${(e?.unidade||'')=== u?'selected':''}>${u}</option>`).join('')}<option value="" ${!e?.unidade?'selected':''}>Não definida</option></select></div>
       <div class="fg"><label class="flbl">Local</label><input class="finput" id="ex-local" value="${e?.local||''}"></div>
     </div>
-    <div class="fgrid">
-      <div class="fg"><label class="flbl">Próx. Recarga *</label><input class="finput" type="date" id="ex-prox" value="${e?.proxRecarga||''}"></div>
-      <div class="fg"><label class="flbl">Teste Hidrostático</label><input class="finput" type="date" id="ex-hidro" value="${e?.testeHidro||''}"></div>
-    </div>
+    <div class="fg"><label class="flbl">Próx. Recarga *</label><input class="finput" type="date" id="ex-prox" value="${e?.proxRecarga||''}"></div>
     <div class="fg"><label class="flbl">Observações</label><textarea class="fta" id="ex-obs" placeholder="Observações sobre o extintor...">${e?.obs||''}</textarea></div>
   </div>
   <div class="modal-foot">
@@ -3049,7 +3097,7 @@ function openExtModal(eid){
 
 function saveExt(eid){
   const num=document.getElementById('ex-num').value.trim();if(!num){toast('Número obrigatório','e');return;}
-  const data={numero:num,tipo:document.getElementById('ex-tipo').value,unidade:document.getElementById('ex-unit').value,local:document.getElementById('ex-local').value.trim(),proxRecarga:document.getElementById('ex-prox').value,testeHidro:document.getElementById('ex-hidro').value,obs:document.getElementById('ex-obs')?.value.trim()||''};
+  const data={numero:num,tipo:document.getElementById('ex-tipo').value,unidade:document.getElementById('ex-unit').value,local:document.getElementById('ex-local').value.trim(),proxRecarga:document.getElementById('ex-prox').value,obs:document.getElementById('ex-obs')?.value.trim()||''};
   if(!S.extintores)S.extintores=[];
   if(eid){Object.assign((S.extintores||[]).find(x=>x.id===eid)||{},data);}else{S.extintores.push({id:'ext'+Date.now(),...data});}
   closeModal();renderExtintores();scheduleAutoSave();toast(eid?'Atualizado!':'Cadastrado!','s');
@@ -3355,25 +3403,45 @@ function gerarRelatorio(tipo){
   else if(tipo==='extintores'||tipo==='so_extintores'||tipo==='so_hidrantes'){
     const mostrarExt=tipo!=='so_hidrantes';
     const mostrarHid=tipo!=='so_extintores';
-    const exts=mostrarExt?(S.extintores||[]).filter(e=>filtUnit(e.unidade)):[];
-    const hids=mostrarHid?(S.hidrantes||[]).filter(h=>filtUnit(h.unidade)):[];
-    html=headerHtml+`<div class="card"><div class="card-head"><div class="card-title">Extintores (${exts.length})</div>
-      <button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button> <button class="btn btn-sm btn-g" onclick="exportarRelatorioXLSX(this)">📊 Excel</button></div>
-      <div class="no-pad"><div class="tw"><table class="dt">
-        <thead><tr><th>Nº</th><th>TIPO</th><th>UNIDADE</th><th>LOCAL</th><th>PRÓX. RECARGA</th><th>TESTE HIDRO</th><th>STATUS</th><th>OBS</th></tr></thead>
-        <tbody>${exts.length?exts.map(e=>{const ve=e.proxRecarga&&e.proxRecarga<hoje;return `<tr>
-          <td class="mono">#${e.numero||'—'}</td><td>${e.tipo||'—'}</td><td>${e.unidade||'—'}</td><td>${e.local||'—'}</td>
-          <td class="mono" style="font-size:11px">${dtFmt(e.proxRecarga)}</td><td class="mono" style="font-size:11px">${dtFmt(e.testeHidro)||'—'}</td>
-          <td><span class="badge ${ve?'b-red':'b-green'}">${ve?'Vencido':'Válido'}</span></td><td style="font-size:11px;color:#aaa">${e.obs||'—'}</td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">Nenhum.</td></tr>'}</tbody>
-      </table></div></div></div>
-      <div class="card" style="margin-top:14px"><div class="card-head"><div class="card-title">Hidrantes (${hids.length})</div></div>
-      <div class="no-pad"><div class="tw"><table class="dt">
-        <thead><tr><th>Nº</th><th>UNIDADE</th><th>LOCAL</th><th>ÚLT. TESTE HIDRO</th><th>PRÓX. TESTE</th><th>STATUS</th><th>OBS</th></tr></thead>
-        <tbody>${hids.length?hids.map(h=>{const ve=h.proxInspecao&&h.proxInspecao<hoje;return `<tr>
-          <td class="mono">#${h.numero||'—'}</td><td>${h.unidade||'—'}</td><td>${h.local||'—'}</td>
-          <td class="mono" style="font-size:11px">${dtFmt(h.ultInspecao)}</td><td class="mono" style="font-size:11px">${dtFmt(h.proxInspecao)}</td>
-          <td><span class="badge ${ve?'b-red':'b-green'}">${ve?'Vencido':'Válido'}</span></td><td style="font-size:11px;color:#aaa">${h.obs||'—'}</td></tr>`;}).join(''):'<tr><td colspan="6" class="empty">Nenhum.</td></tr>'}</tbody>
-      </table></div></div></div>`;
+    const exts=mostrarExt?(S.extintores||[]).filter(e=>filtUnit(e.unidade)):null;
+    const hids=mostrarHid?(S.hidrantes||[]).filter(h=>filtUnit(h.unidade)):null;
+
+    let extHtml='';
+    if(exts!==null){
+      extHtml=`<div class="card"><div class="card-head"><div class="card-title">Extintores (${exts.length})</div>
+        <button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button>
+        <button class="btn btn-sm btn-g" onclick="exportarRelatorioXLSX(this)">📊 Excel</button></div>
+        <div class="no-pad"><div class="tw"><table class="dt">
+          <thead><tr><th>Nº</th><th>TIPO</th><th>UNIDADE</th><th>LOCAL</th><th>PRÓX. RECARGA</th><th>STATUS</th><th>OBS</th></tr></thead>
+          <tbody>${exts.length?exts.map(e=>{
+            const ve=e.proxRecarga&&e.proxRecarga<hoje;
+            return '<tr><td class="mono">#'+( e.numero||'—')+'</td><td>'+(e.tipo||'—')+'</td><td>'+(e.unidade||'—')+'</td><td>'+(e.local||'—')+'</td>'
+              +'<td class="mono" style="font-size:11px">'+dtFmt(e.proxRecarga)+'</td>'
+              +'<td><span class="badge '+(ve?'b-red':'b-green')+'">'+(ve?'Vencido':'Válido')+'</span></td>'
+              +'<td style="font-size:11px;color:#aaa">'+(e.obs||'—')+'</td></tr>';
+          }).join(''):'<tr><td colspan="7" class="empty">Nenhum extintor.</td></tr>'}</tbody>
+        </table></div></div></div>`;
+    }
+
+    let hidHtml='';
+    if(hids!==null){
+      hidHtml=`<div class="card" style="margin-top:14px"><div class="card-head"><div class="card-title">Hidrantes (${hids.length})</div>
+        ${exts===null?'<button class="btn btn-sm" onclick="imprimirRelatorio()">🖨️ Imprimir</button><button class="btn btn-sm btn-g" onclick="exportarRelatorioXLSX(this)">📊 Excel</button>':''}
+        </div>
+        <div class="no-pad"><div class="tw"><table class="dt">
+          <thead><tr><th>Nº</th><th>UNIDADE</th><th>LOCAL</th><th>ÚLT. TESTE HIDRO</th><th>PRÓX. TESTE</th><th>STATUS</th><th>OBS</th></tr></thead>
+          <tbody>${hids.length?hids.map(h=>{
+            const ve=h.proxInspecao&&h.proxInspecao<hoje;
+            return '<tr><td class="mono">#'+(h.numero||'—')+'</td><td>'+(h.unidade||'—')+'</td><td>'+(h.local||'—')+'</td>'
+              +'<td class="mono" style="font-size:11px">'+dtFmt(h.ultInspecao)+'</td>'
+              +'<td class="mono" style="font-size:11px">'+dtFmt(h.proxInspecao)+'</td>'
+              +'<td><span class="badge '+(ve?'b-red':'b-green')+'">'+(ve?'Vencido':'Válido')+'</span></td>'
+              +'<td style="font-size:11px;color:#aaa">'+(h.obs||'—')+'</td></tr>';
+          }).join(''):'<tr><td colspan="7" class="empty">Nenhum hidrante.</td></tr>'}</tbody>
+        </table></div></div></div>`;
+    }
+
+    html=headerHtml+extHtml+hidHtml;
   }
 
   prev.innerHTML=html;
