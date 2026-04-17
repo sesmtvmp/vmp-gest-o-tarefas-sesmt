@@ -562,6 +562,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
       <div id="v-inspecoes" style="display:none">
         <div class="toolbar">
           <span class="toolbar-title">🔍 Inspeções de Segurança</span>
+          <select class="fi" id="insp-unit-f" onchange="renderInspecoes()" style="width:150px"><option value="">Todas as unidades</option></select>
           <select class="fi" id="insp-status-f" onchange="renderInspecoes()">
             <option value="">Todos os status</option>
             <option value="pendente">Pendente</option>
@@ -585,6 +586,7 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
             <strong style="color:var(--blue)"> Desvio</strong> = situação fora do padrão que NÃO causou dano (ex: EPI não utilizado, piso molhado sem sinalização).
             <strong style="color:var(--red)"> Incidente</strong> = evento inesperado que causou ou poderia causar dano (ex: queda quase ocorrida, colisão sem lesão).
           </div>
+          <select class="fi" id="desv-unit-f" onchange="renderDesvios()" style="width:150px"><option value="">Todas as unidades</option></select>
           <button class="btn btn-sm" onclick="setView('relatorios');setTimeout(()=>gerarRelatorio('desvios'),100)">📈 Relatório</button>
           <button class="btn btn-p btn-sm" onclick="openDesvioModal()">+ Registrar</button>
         </div>
@@ -1004,7 +1006,7 @@ function applyDefaultUnit(){
   if(isAdm)return; // admins escolhem livremente
   const units=cu.units||[];
   if(units.length!==1)return; // só força se tiver exatamente 1 unidade
-  ['fi-unit','li-unit','ci-unit','dash-unit','trein-unit-f','oss-unit-f','colab-unit-f','rel-unit'].forEach(id=>{
+  ['fi-unit','li-unit','ci-unit','dash-unit','trein-unit-f','oss-unit-f','colab-unit-f','rel-unit','insp-unit-f','desv-unit-f'].forEach(id=>{
     const el=document.getElementById(id);
     if(el&&!el.value)el.value=units[0];
   });
@@ -1028,8 +1030,8 @@ function setView(v){
   else if(v==='treinamentos'){populateFilters();applyDefaultUnit();renderTreinamentos();}
   else if(v==='oss'){populateOSSFilters();applyDefaultUnit();ossResetPage();}
   else if(v==='relatorios'){populateFilters();autoPopulateRelFuncs();}
-  else if(v==='inspecoes')renderInspecoes();
-  else if(v==='desvios')renderDesvios();
+  else if(v==='inspecoes'){populateFilters();applyDefaultUnit();renderInspecoes();}
+  else if(v==='desvios'){populateFilters();applyDefaultUnit();renderDesvios();}
   else if(v==='extintores')renderExtintores();
 }
 
@@ -1074,7 +1076,7 @@ function populateFilters(){
         el.innerHTML+=`<option value="${u}">${u}</option>`;
     });
     // Opção especial "Sem Unidade Definida" — apenas nos filtros de colaboradores e OS
-    if(['colab-unit-f','oss-unit-f'].includes(id)){
+    if(['colab-unit-f','oss-unit-f','insp-unit-f','desv-unit-f'].includes(id)){
       el.innerHTML+=`<option value="__sem_unidade__">⚠ Sem Unidade Definida</option>`;
     }
     if(prev&&(visibleUnits.includes(prev)||prev==='__sem_unidade__'))el.value=prev;
@@ -2642,7 +2644,7 @@ function renderOSS(){
   ${desatualizada>0?`<div class="alert alert-warn">⚠ ${desatualizada} colaborador(es) com OS desatualizada.</div>`:''}
   <div class="card"><div class="card-head"><div class="card-title">OS por Colaborador</div></div>
   <div class="no-pad"><div class="tw"><table class="dt">
-    <thead><tr><th>PRONTUÁRIO</th><th>COLABORADOR</th><th>FUNÇÃO</th><th>UNIDADE</th><th>ATUALIZ. OS</th><th>STATUS</th><th>ENTREGA / HIST.</th><th>AÇÕES</th></tr></thead>
+    <thead><tr><th>PRONTUÁRIO</th><th>COLABORADOR</th><th>FUNÇÃO</th><th>UNIDADE</th><th>STATUS</th><th>ENTREGA / HIST.</th><th>AÇÕES</th></tr></thead>
     <tbody>${!pageColabs.length?`<tr><td colspan="8" class="empty">Nenhum colaborador encontrado.</td></tr>`:
     pageColabs.map(c=>{
       const ossRec=ossIdx[c.id];
@@ -2653,7 +2655,6 @@ function renderOSS(){
         <td class="td-main">${c.nome}</td>
         <td style="font-size:11px">${c.funcao||'—'}</td>
         <td style="font-size:11px">${c.unidade||'—'}</td>
-        <td class="mono" style="font-size:11px">${ossRec?.dataAtualizacao?fmtDt(ossRec.dataAtualizacao):'—'}</td>
         <td><span class="badge ${st.badge}">${st.label}</span></td>
         <td class="mono" style="font-size:11px">${ossRec?.dataEntrega?fmtDt(ossRec.dataEntrega):'—'}${hist>0?` <span class="badge b-blue" style="cursor:pointer" onclick="showOSSHist('${c.id}')" title="Ver histórico">📋 ${hist}</span>`:''}</td>
         <td><button class="btn btn-sm" onclick="openOSSEditModal('${c.id}')">${ossRec?'✏️':'+ OS'}</button></td>
@@ -2679,27 +2680,39 @@ function showOSSHist(colabId){
   const hist=(S.ossHistorico||[]).filter(h=>h.colabId===colabId).sort((a,b)=>(b.dt||'').localeCompare(a.dt||''));
   showModal(`<div class="modal-hdr"><div class="modal-ttl">📋 Histórico de OS — ${c?.nome||''}</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
-    <div class="tw"><table class="dt"><thead><tr><th>REGISTRO</th><th>ATUALIZ. OS</th><th>DATA ENTREGA</th><th>STATUS</th><th>OBS</th></tr></thead>
+    ${hist.length>0?`<div style="text-align:right;margin-bottom:8px"><button class="btn btn-sm btn-d" onclick="delOSSHistAll('${colabId}')">🗑 Excluir todo o histórico</button></div>`:''}
+    <div class="tw"><table class="dt"><thead><tr><th>REGISTRO</th><th>DATA ENTREGA</th><th>STATUS</th><th>OBS</th><th>AÇÕES</th></tr></thead>
     <tbody>${hist.length?hist.map(h=>`<tr>
       <td class="mono" style="font-size:11px">${fmtDt(h.dt)||'—'}</td>
-      <td class="mono" style="font-size:11px">${fmtDt(h.dataAtualizacao)||'—'}</td>
       <td class="mono" style="font-size:11px">${fmtDt(h.dataEntrega)||'—'}</td>
       <td><span class="badge ${h.status==='entregue'?'b-green':h.status==='desatualizada'?'b-amber':'b-gray'}">${h.status==='entregue'?'Entregue':h.status==='desatualizada'?'Desatualizada':'Pendente'}</span></td>
       <td style="font-size:11px;color:var(--text3)">${h.obs||'—'}</td>
-    </tr>`).join(''):`<tr><td colspan="5" class="empty">Sem histórico.</td></tr>`}</tbody>
+      <td><button class="btn btn-sm btn-d" onclick="delOSSHistItem('${h.id}','${colabId}')">🗑</button></td>
+    </tr>`).join(''):`<tr><td colspan="6" class="empty">Sem histórico.</td></tr>`}</tbody>
     </table></div>
   </div>`);
 }
 
+function delOSSHistItem(histId,colabId){
+  if(!confirm('Excluir este registro do histórico?'))return;
+  S.ossHistorico=(S.ossHistorico||[]).filter(x=>x.id!==histId);
+  showOSSHist(colabId);
+  scheduleAutoSave();toast('Registro excluído','i');
+}
+function delOSSHistAll(colabId){
+  const c=(S.colaboradores||[]).find(x=>x.id===colabId);
+  if(!confirm(`Excluir TODO o histórico de OS de ${c?.nome||'este colaborador'}?`))return;
+  S.ossHistorico=(S.ossHistorico||[]).filter(x=>x.colabId!==colabId);
+  // Também remove o registro atual de OS
+  S.oss=(S.oss||[]).filter(x=>x.colabId!==colabId);
+  closeModal();renderOSS();scheduleAutoSave();toast('Histórico excluído','i');
+}
 function openOSSEditModal(colabId){
   const c=(S.colaboradores||[]).find(x=>x.id===colabId);
   const ossRec=(S.oss||[]).find(o=>o.colabId===colabId);
   showModal(`<div class="modal-hdr"><div class="modal-ttl">OS — ${c?.nome||''}</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
-    <div class="fgrid">
-      <div class="fg"><label class="flbl">Data de Atualização da OS</label><input class="finput" type="date" id="oss-e-atu" value="${ossRec?.dataAtualizacao||nowDt()}"></div>
-      <div class="fg"><label class="flbl">Data de Entrega</label><input class="finput" type="date" id="oss-e-data" value="${ossRec?.dataEntrega||''}"></div>
-    </div>
+    <div class="fg"><label class="flbl">Data de Entrega</label><input class="finput" type="date" id="oss-e-data" value="${ossRec?.dataEntrega||''}"></div>
     <div class="fg"><label class="flbl">Status</label><select class="fsel" id="oss-e-status">
       <option value="pendente" ${!ossRec?.entregue?'selected':''}>Pendente</option>
       <option value="entregue" ${ossRec?.entregue&&!ossRec?.desatualizada?'selected':''}>Entregue/Assinada</option>
@@ -2714,7 +2727,7 @@ function saveOSSEdit(colabId){
   if(!S.oss)S.oss=[];if(!S.ossHistorico)S.ossHistorico=[];
   const st=document.getElementById('oss-e-status').value;
   const dataEntrega=document.getElementById('oss-e-data').value;
-  const dataAtualizacao=document.getElementById('oss-e-atu').value;
+  const dataAtualizacao=nowDt();
   const obs=document.getElementById('oss-e-obs').value.trim();
   const rec={id:'oss'+Date.now(),colabId,dataAtualizacao,dataEntrega,entregue:st==='entregue',desatualizada:st==='desatualizada',obs};
   const idx=(S.oss||[]).findIndex(o=>o.colabId===colabId);
@@ -2815,7 +2828,14 @@ function saveOSSBulk(){
 function renderInspecoes(){
   const el=document.getElementById('insp-content');if(!el)return;
   const sf=document.getElementById('insp-status-f')?.value||'';
-  const insp=(S.inspecoes||[]).filter(i=>(!sf||i.status===sf)&&canSeeUnit(i.unidade)).sort((a,b)=>b.data.localeCompare(a.data));
+  const inspUnit=document.getElementById('insp-unit-f')?.value||'';
+  const insp=(S.inspecoes||[]).filter(i=>{
+    if(!canSeeUnit(i.unidade))return false;
+    if(sf&&i.status!==sf)return false;
+    if(inspUnit==='__sem_unidade__'&&i.unidade)return false;
+    if(inspUnit&&inspUnit!=='__sem_unidade__'&&i.unidade!==inspUnit)return false;
+    return true;
+  }).sort((a,b)=>b.data.localeCompare(a.data));
   el.innerHTML=`
   <div class="stats-grid">
     <div class="stat s-blue"><div class="stat-lbl">TOTAL</div><div class="stat-val">${(S.inspecoes||[]).length}</div></div>
@@ -2927,7 +2947,13 @@ function delInsp(id){
 // ============ DESVIOS/INCIDENTES ============
 function renderDesvios(){
   const el=document.getElementById('desvio-content');if(!el)return;
-  const desvios=(S.desvios||[]).filter(d=>canSeeUnit(d.unidade)).slice().sort((a,b)=>b.data.localeCompare(a.data));
+  const desvUnit=document.getElementById('desv-unit-f')?.value||'';
+  const desvios=(S.desvios||[]).filter(d=>{
+    if(!canSeeUnit(d.unidade))return false;
+    if(desvUnit==='__sem_unidade__'&&d.unidade)return false;
+    if(desvUnit&&desvUnit!=='__sem_unidade__'&&d.unidade!==desvUnit)return false;
+    return true;
+  }).slice().sort((a,b)=>b.data.localeCompare(a.data));
   el.innerHTML=`
   <div class="stats-grid">
     <div class="stat s-blue"><div class="stat-lbl">TOTAL</div><div class="stat-val">${desvios.length}</div></div>
@@ -3048,11 +3074,10 @@ function renderExtintores(){
   <div class="g2">
     <div class="card"><div class="card-head"><div class="card-title">🧯 Extintores</div><div class="card-acts"><button class="btn btn-p btn-sm" onclick="openExtModal()">+ Extintor</button></div></div>
     <div class="no-pad"><div class="tw"><table class="dt">
-      <thead><tr><th>Nº</th><th>TIPO</th><th>UNIDADE</th><th>LOCAL</th><th>ÚLT. RECARGA</th><th>PRÓX. RECARGA</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+      <thead><tr><th>Nº</th><th>TIPO</th><th>UNIDADE</th><th>LOCAL</th><th>PRÓX. RECARGA</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
       <tbody>${!exts.length?`<tr><td colspan="7" class="empty">Nenhum extintor.</td></tr>`:
       exts.map(e=>{const ve=e.proxRecarga&&e.proxRecarga<hoje;const av=!ve&&e.proxRecarga&&diffDays(hoje,e.proxRecarga)<=30;
         return `<tr><td class="mono">#${e.numero||'—'}</td><td>${e.tipo||'—'}</td><td style="font-size:11px">${e.unidade||'—'}</td><td>${e.local||'—'}</td>
-          <td class="mono" style="font-size:11px">${fmtDt(e.ultRecarga)||'—'}</td>
           <td class="mono" style="font-size:11px">${fmtDt(e.proxRecarga)||'—'}</td>
           <td><span class="badge ${ve?'b-red':av?'b-amber':'b-green'}">${ve?'Vencido':av?'A Vencer':'Válido'}</span></td>
           <td><button class="btn btn-sm" onclick="openExtModal('${e.id}')">✏️</button></td></tr>`;
