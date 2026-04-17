@@ -2488,6 +2488,7 @@ function openColabDetail(id){
   }).join(''):'<tr><td colspan="5" class="empty">Cadastre treinamentos na aba Treinamentos primeiro.</td></tr>';
   const ossInfo=getOSSStatus(id);
   const ossRec=(S.oss||[]).find(o=>o.colabId===id);
+  const ossHistCount=(S.ossHistorico||[]).filter(h=>h.colabId===id).length;
   showModal(`<div class="modal-hdr"><div class="modal-ttl">👤 ${c.nome}</div><button class="ib" onclick="closeModal()">✕</button></div>
   <div class="modal-body">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
@@ -2503,16 +2504,60 @@ function openColabDetail(id){
     <div style="font-size:12px;font-weight:600;margin-bottom:10px">🎓 Treinamentos</div>
     <div class="tw"><table class="dt"><thead><tr><th>CÓD</th><th>TREINAMENTO</th><th>REALIZADO</th><th>STATUS</th><th>AÇÃO</th></tr></thead><tbody>${treinHtml}</tbody></table></div>
     <div class="sep"></div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
       <span style="font-size:12px;font-weight:600">📋 Ordem de Serviço</span>
       <span class="badge ${ossInfo.badge}">${ossInfo.label}</span>
+      ${ossRec?`<span style="font-size:11px;color:var(--text3)">Entregue: ${ossRec.dataEntrega?fmtDt(ossRec.dataEntrega):'—'}</span>`:''}
     </div>
-    ${ossRec?`<div style="font-size:12px;color:var(--text2)">Atualiz.: ${ossRec.dataAtualizacao?fmtDt(ossRec.dataAtualizacao):'—'} · Entregue: ${ossRec.dataEntrega?fmtDt(ossRec.dataEntrega):'Não'}</div>
-    <button class="btn btn-sm" style="margin-top:6px" onclick="openOSSEditModal('${id}')">✏️ Atualizar OS</button>`:
-    `<button class="btn btn-sm btn-p" onclick="openOSSEditModal('${id}')">+ Vincular OS</button>`}
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-sm" onclick="openOSSEditModal('${id}')">✏️ ${ossRec?'Atualizar OS':'+ Vincular OS'}</button>
+      ${ossHistCount>0?`<button class="btn btn-sm" onclick="showOSSHistFromColab('${id}')">📋 Histórico (${ossHistCount})</button>`:''}
+    </div>
     <div class="sep"></div>
     <button class="btn btn-sm" onclick="closeModal();openColabModal('${id}')">✏️ Editar dados</button>
   </div>`,true);
+}
+
+// Abre histórico de OS a partir do detalhe do colaborador
+// Ao excluir todo o histórico, volta para o detalhe do colaborador
+function showOSSHistFromColab(colabId){
+  const col=(S.colaboradores||[]).find(x=>x.id===colabId);
+  const hist=(S.ossHistorico||[]).filter(h=>h.colabId===colabId).sort((a,b)=>(b.dt||'').localeCompare(a.dt||''));
+  showModal(`<div class="modal-hdr"><div class="modal-ttl">📋 Histórico de OS — ${col?.nome||''}</div><button class="ib" onclick="openColabDetail('${colabId}')">✕</button></div>
+  <div class="modal-body">
+    ${hist.length>0?`<div style="text-align:right;margin-bottom:8px">
+      <button class="btn btn-sm btn-d" onclick="delOSSHistAllFromColab('${colabId}')">🗑 Excluir todo o histórico</button>
+    </div>`:''}
+    <div class="tw"><table class="dt"><thead><tr><th>REGISTRO</th><th>DATA ENTREGA</th><th>STATUS</th><th>OBS</th><th>AÇÃO</th></tr></thead>
+    <tbody>${hist.length?hist.map(h=>`<tr>
+      <td class="mono" style="font-size:11px">${fmtDt(h.dt)||'—'}</td>
+      <td class="mono" style="font-size:11px">${fmtDt(h.dataEntrega)||'—'}</td>
+      <td><span class="badge ${h.status==='entregue'?'b-green':h.status==='desatualizada'?'b-amber':'b-gray'}">${h.status==='entregue'?'Entregue':h.status==='desatualizada'?'Desatualizada':'Pendente'}</span></td>
+      <td style="font-size:11px;color:var(--text3)">${h.obs||'—'}</td>
+      <td><button class="btn btn-sm btn-d" onclick="delOSSHistItemFromColab('${h.id}','${colabId}')">🗑</button></td>
+    </tr>`).join(''):`<tr><td colspan="5" class="empty">Sem histórico.</td></tr>`}</tbody>
+    </table></div>
+  </div>`,true);
+}
+
+function delOSSHistItemFromColab(histId,colabId){
+  if(!confirm('Excluir este registro do histórico?'))return;
+  S.ossHistorico=(S.ossHistorico||[]).filter(x=>x.id!==histId);
+  scheduleAutoSave();toast('Registro excluído','i');
+  showOSSHistFromColab(colabId); // atualiza o modal
+}
+
+function delOSSHistAllFromColab(colabId){
+  const col=(S.colaboradores||[]).find(x=>x.id===colabId);
+  if(!confirm(`Excluir TODO o histórico de OS de ${col?.nome||'este colaborador'}?`))return;
+  S.ossHistorico=(S.ossHistorico||[]).filter(x=>x.colabId!==colabId);
+  // Reseta o registro atual de OS para pendente
+  const idx=(S.oss||[]).findIndex(x=>x.colabId===colabId);
+  if(idx>=0){
+    S.oss[idx]={id:S.oss[idx].id,colabId,dataAtualizacao:'',dataEntrega:'',entregue:false,desatualizada:false,obs:''};
+  }
+  scheduleAutoSave();toast('Histórico excluído — OS resetada para Pendente','i');
+  openColabDetail(colabId); // volta para o detalhe atualizado
 }
 
 function openAddTreinHistModal(colabId,treinId){
