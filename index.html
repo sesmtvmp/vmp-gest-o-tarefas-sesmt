@@ -990,8 +990,8 @@ function entrarNoApp(u){
   document.getElementById('ha').style.background=abg(i);
   document.getElementById('ha').style.color=atc(i);
   applySettings();populateFilters();applyDefaultUnit();updateCounts();renderKanban();updateMsgBadge();checkDeadlineAlerts();updateAvisosBadge();startPolling();
-  // Exibe popup de avisos não lidos após a tela carregar
-  setTimeout(()=>checkAvisosPopup(),800);
+  // Popup de avisos — aguarda 1.5s para garantir que os dados do Redis já foram carregados
+  setTimeout(()=>checkAvisosPopup(),1500);
 }
 
 function doLogout(){
@@ -1855,11 +1855,13 @@ function delAviso(id){
 
 function reenviarAvisoPopup(id){
   const a=(S.avisos||[]).find(x=>x.id===id);if(!a)return;
-  // Limpa a lista de quem já viu o popup e ativa a flag — todos receberão na próxima entrada
+  // Limpa popup visto e readBy — todos receberão o popup novamente
   a.popupVisto=[];
+  a.readBy=[];
   a.exibirPopup=true;
   scheduleAutoSave();
-  toast('Popup será reexibido para todos os usuários na próxima vez que entrarem','s');
+  renderAvisos();updateAvisosBadge();
+  toast('Aviso reenviado — todos os usuários verão o popup na próxima entrada','s');
 }
 function openNewAvisoModal(){
   if(!isRoot(S_cu)&&!S_cu?.p?.isAdmin){toast('Sem permissão','e');return;}
@@ -1882,19 +1884,17 @@ function saveAviso(){
 // Verifica e exibe popup de avisos não lidos ao entrar no app
 function checkAvisosPopup(){
   const cu=S_cu;if(!cu)return;
-  // Não mostra se já tem um popup aberto
+  // Não mostra se já tem popup aberto
   if(document.getElementById('aviso-popup-overlay'))return;
-  // Admins não recebem popup (eles criam os avisos)
+  // Admins não recebem popup
   if(isRoot(cu)||cu.p?.isAdmin)return;
-  // Busca avisos que o usuário pode ver e ainda não viu em popup
+
+  // Qualquer aviso que o usuário pode ver e ainda não viu o popup
   const pendentes=(S.avisos||[]).filter(a=>{
     if(!podeVerAviso(a))return false;
-    // Considera avisos publicados por admins (não sistema automático) OU com exibirPopup=true
-    const isAdminAviso=!a.isSistema||a.exibirPopup;
-    if(!isAdminAviso)return false;
     if((a.popupVisto||[]).includes(cu.id))return false;
     return true;
-  }).sort((a,b)=>b.dt.localeCompare(a.dt));
+  }).sort((a,b)=>(b.dt||'').localeCompare(a.dt||''));
 
   if(!pendentes.length)return;
 
@@ -1903,24 +1903,29 @@ function checkAvisosPopup(){
 
   const overlay=document.createElement('div');
   overlay.id='aviso-popup-overlay';
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn .2s ease';
+  overlay.style.cssText=[
+    'position:fixed','top:0','left:0','right:0','bottom:0',
+    'background:rgba(0,0,0,.75)','z-index:99999',
+    'display:flex','align-items:center','justify-content:center','padding:16px'
+  ].join(';');
+
   overlay.innerHTML=`
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:500px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.6);overflow:hidden">
+    <div style="background:var(--bg2);border:2px solid var(--accent);border-radius:12px;max-width:500px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.7);overflow:hidden">
       <div style="background:var(--accent);padding:16px 20px;display:flex;align-items:center;gap:12px">
-        <span style="font-size:22px">📢</span>
+        <span style="font-size:24px">📢</span>
         <div style="flex:1">
-          <div style="font-size:15px;font-weight:700;color:#fff">${aviso.title}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px">${fmtD(aviso.dt)}</div>
+          <div style="font-size:15px;font-weight:700;color:#fff">${aviso.title||'Aviso'}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.8);margin-top:2px">${fmtD(aviso.dt)}</div>
         </div>
-        <span style="font-size:10px;color:rgba(255,255,255,.6);background:rgba(0,0,0,.2);padding:2px 8px;border-radius:999px">AVISO</span>
       </div>
-      <div style="padding:20px;font-size:13px;color:var(--text1);line-height:1.8;white-space:pre-wrap;max-height:300px;overflow-y:auto">${aviso.body}</div>
-      ${restante>0?`<div style="padding:0 20px 12px;font-size:11px;color:var(--amber)">⚠ Você tem mais ${restante} aviso(s) não lido(s).</div>`:''}
+      <div style="padding:20px;font-size:13px;line-height:1.8;white-space:pre-wrap;max-height:320px;overflow-y:auto;color:var(--text1)">${aviso.body}</div>
+      ${restante>0?`<div style="padding:0 20px 10px;font-size:12px;color:var(--amber);font-weight:500">⚠ Você tem mais ${restante} aviso(s) pendente(s).</div>`:''}
       <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--bg3)">
-        <button class="btn btn-sm" onclick="fecharAvisoPopup('${aviso.id}',false)">🔔 Ver depois (aba Avisos)</button>
-        <button class="btn btn-p btn-sm" onclick="fecharAvisoPopup('${aviso.id}',true)">✓ Entendido</button>
+        <button onclick="fecharAvisoPopup('${aviso.id}',false)" style="padding:8px 16px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;font-size:13px">🔔 Ver depois</button>
+        <button onclick="fecharAvisoPopup('${aviso.id}',true)" style="padding:8px 16px;border-radius:6px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:600">✓ Entendido</button>
       </div>
     </div>`;
+
   document.body.appendChild(overlay);
 }
 
