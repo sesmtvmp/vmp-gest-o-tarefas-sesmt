@@ -450,6 +450,8 @@ input.fi:focus,select.fi:focus{border-color:var(--accent)}
         <div class="toolbar">
           <span class="toolbar-title">🔔 Avisos</span>
           <button class="btn btn-sm" onclick="marcarTodosLidos()" style="font-size:11px">✓ Marcar todos como lidos</button>
+          <button class="btn btn-sm btn-d" id="btn-del-avisos-sel" style="display:none;font-size:11px" onclick="delAvisosSelecionados()">🗑 Excluir selecionados</button>
+          <button class="btn btn-sm btn-d" id="btn-del-todos-avisos" style="display:none;font-size:11px" onclick="delTodosAvisos()">🗑 Excluir todos</button>
         </div>
         <div id="avisos-list"></div>
       </div>
@@ -880,7 +882,10 @@ function startPolling(){
     try{
       const r=await fetch('/api/data?t='+Date.now());if(!r.ok)return;
       const data=await r.json();if(data.error)return;
-      if(data.updatedAt&&data.updatedAt!==_lastUpdatedAt){applyData(data,false);setLastSync(data.updatedAt);}
+      if(data.updatedAt&&data.updatedAt!==_lastUpdatedAt){applyData(data,false);setLastSync(data.updatedAt);
+        // Verifica se há novos avisos para exibir em popup
+        if(S_cu)checkAvisosPopup();
+      }
       checkDeadlineAlerts();
     }catch(e){}
   },10000);
@@ -985,6 +990,8 @@ function entrarNoApp(u){
   document.getElementById('ha').style.background=abg(i);
   document.getElementById('ha').style.color=atc(i);
   applySettings();populateFilters();applyDefaultUnit();updateCounts();renderKanban();updateMsgBadge();checkDeadlineAlerts();updateAvisosBadge();startPolling();
+  // Exibe popup de avisos não lidos após a tela carregar
+  setTimeout(()=>checkAvisosPopup(),800);
 }
 
 function doLogout(){
@@ -1781,17 +1788,57 @@ function marcarTodosLidos(){
 }
 function renderAvisos(){
   const el=document.getElementById('avisos-list');if(!el)return;
+  const isAdm=isRoot(S_cu)||S_cu?.p?.isAdmin;
   const av=(S.avisos||[]).slice().reverse();
   const avFilt=av.filter(a=>podeVerAviso(a));
+  // Mostra botões de exclusão em lote apenas para admins
+  const btnSel=document.getElementById('btn-del-avisos-sel');
+  const btnTodos=document.getElementById('btn-del-todos-avisos');
+  if(btnTodos)btnTodos.style.display=isAdm&&avFilt.length?'inline-flex':'none';
+  if(btnSel)btnSel.style.display='none'; // aparece só quando há seleção
   if(!avFilt.length){el.innerHTML='<div class="empty">Nenhum aviso.</div>';return;}
   el.innerHTML=avFilt.map(a=>{
     const unread=!(a.readBy||[]).includes(S_cu?.id);
     return `<div class="msg-card ${unread?'unread':''}" onclick="markAvisoRead('${a.id}',this)">
-      <div class="msg-hdr"><span class="msg-from">${a.title||'Aviso'}</span><span class="msg-date">${fmtD(a.dt)}</span></div>
+      <div class="msg-hdr">
+        <div style="display:flex;align-items:center;gap:8px">
+          ${isAdm?`<input type="checkbox" class="av-chk" value="${a.id}" style="accent-color:var(--accent);width:14px;height:14px;flex-shrink:0" onclick="event.stopPropagation();updateAvisosBulkBar()" >`:''}
+          <span class="msg-from">${a.title||'Aviso'}</span>
+        </div>
+        <span class="msg-date">${fmtD(a.dt)}</span>
+      </div>
       <div class="msg-body">${a.body}</div>
-      ${isRoot(S_cu)||S_cu?.p?.isAdmin?`<button class="btn btn-sm btn-d" onclick="event.stopPropagation();delAviso('${a.id}')">🗑 Excluir</button>`:''}
+      ${isAdm?`<button class="btn btn-sm btn-d" onclick="event.stopPropagation();delAviso('${a.id}')">🗑 Excluir</button>`:''}
     </div>`;
   }).join('');
+}
+
+function updateAvisosBulkBar(){
+  const sel=document.querySelectorAll('.av-chk:checked').length;
+  const btn=document.getElementById('btn-del-avisos-sel');
+  if(btn)btn.style.display=sel>0?'inline-flex':'none';
+  if(btn&&sel>0)btn.textContent=`🗑 Excluir ${sel} selecionado(s)`;
+}
+
+function delAvisosSelecionados(){
+  const ids=[...document.querySelectorAll('.av-chk:checked')].map(c=>c.value);
+  if(!ids.length){toast('Nenhum aviso selecionado','e');return;}
+  if(!confirm(`Excluir ${ids.length} aviso(s) selecionado(s)?`))return;
+  S.avisos=(S.avisos||[]).filter(x=>!ids.includes(x.id));
+  renderAvisos();updateAvisosBadge();scheduleAutoSave();
+  toast(`${ids.length} aviso(s) excluído(s)`,'i');
+}
+
+function delTodosAvisos(){
+  const isAdm=isRoot(S_cu)||S_cu?.p?.isAdmin;
+  if(!isAdm){toast('Sem permissão','e');return;}
+  const visiveis=(S.avisos||[]).filter(a=>podeVerAviso(a));
+  if(!visiveis.length)return;
+  if(!confirm(`Excluir TODOS os ${visiveis.length} avisos visíveis?`))return;
+  const ids=new Set(visiveis.map(a=>a.id));
+  S.avisos=(S.avisos||[]).filter(x=>!ids.has(x.id));
+  renderAvisos();updateAvisosBadge();scheduleAutoSave();
+  toast('Todos os avisos excluídos','i');
 }
 function markAvisoRead(id,el){
   const a=(S.avisos||[]).find(x=>x.id===id);
@@ -1815,8 +1862,70 @@ function saveAviso(){
   const title=document.getElementById('av-title').value.trim();const body=document.getElementById('av-body').value.trim();
   if(!title||!body){toast('Preencha título e mensagem','e');return;}
   if(!S.avisos)S.avisos=[];
-  S.avisos.push({id:'av'+Date.now(),title,body,dt:nowDt(),readBy:[]});
+  // exibirPopup=true indica que este aviso deve aparecer em popup para usuários na próxima entrada
+  S.avisos.push({id:'av'+Date.now(),title,body,dt:nowDt(),readBy:[],exibirPopup:true});
   closeModal();renderAvisos();updateAvisosBadge();scheduleAutoSave();toast('Aviso publicado!','s');
+}
+
+// Verifica e exibe popup de avisos não lidos ao entrar no app
+function checkAvisosPopup(){
+  const cu=S_cu;if(!cu)return;
+  // Busca avisos com exibirPopup=true que o usuário ainda não viu (não está em popupVisto)
+  const pendentes=(S.avisos||[]).filter(a=>{
+    if(!a.exibirPopup)return false;
+    if(!podeVerAviso(a))return false;
+    if((a.popupVisto||[]).includes(cu.id))return false;
+    return true;
+  }).sort((a,b)=>b.dt.localeCompare(a.dt)); // mais recente primeiro
+
+  if(!pendentes.length)return;
+
+  // Mostra o primeiro aviso pendente em popup
+  const aviso=pendentes[0];
+  const restante=pendentes.length-1;
+
+  // Usa um overlay especial (não o modal normal) para não interferir
+  const overlay=document.createElement('div');
+  overlay.id='aviso-popup-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML=`
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden">
+      <div style="background:var(--accent);padding:14px 18px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">📢</span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700;color:#fff">${aviso.title}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.7)">${fmtD(aviso.dt)}</div>
+        </div>
+      </div>
+      <div style="padding:18px;font-size:13px;color:var(--text1);line-height:1.7;white-space:pre-wrap">${aviso.body}</div>
+      ${restante>0?`<div style="padding:0 18px 10px;font-size:11px;color:var(--text3)">📋 Você tem mais ${restante} aviso(s) não lido(s) na aba Avisos.</div>`:''}
+      <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-sm" onclick="fecharAvisoPopup('${aviso.id}',false)">Ver mais tarde</button>
+        <button class="btn btn-p btn-sm" onclick="fecharAvisoPopup('${aviso.id}',true)">✓ Entendido</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function fecharAvisoPopup(avisoId, marcarLido){
+  const overlay=document.getElementById('aviso-popup-overlay');
+  if(overlay)overlay.remove();
+  const aviso=(S.avisos||[]).find(x=>x.id===avisoId);
+  if(!aviso)return;
+  // Marca que este usuário já viu o popup
+  if(!aviso.popupVisto)aviso.popupVisto=[];
+  if(!aviso.popupVisto.includes(S_cu.id))aviso.popupVisto.push(S_cu.id);
+  // Se clicou em "Entendido", marca também como lido na aba de avisos
+  if(marcarLido){
+    if(!aviso.readBy)aviso.readBy=[];
+    if(!aviso.readBy.includes(S_cu.id))aviso.readBy.push(S_cu.id);
+  }
+  scheduleAutoSave();
+  updateAvisosBadge();
+  // Se havia mais avisos pendentes, mostra o próximo após um pequeno delay
+  if(marcarLido){
+    setTimeout(()=>checkAvisosPopup(),300);
+  }
 }
 
 // ============ MESSAGES ============
@@ -2543,8 +2652,24 @@ function showOSSHistFromColab(colabId){
 function delOSSHistItemFromColab(histId,colabId){
   if(!confirm('Excluir este registro do histórico?'))return;
   S.ossHistorico=(S.ossHistorico||[]).filter(x=>x.id!==histId);
-  scheduleAutoSave();toast('Registro excluído','i');
-  showOSSHistFromColab(colabId); // atualiza o modal
+  // Se não sobrou nenhum registro para este colaborador, reseta OS para pendente
+  const remaining=(S.ossHistorico||[]).filter(x=>x.colabId===colabId);
+  if(remaining.length===0){
+    const idx=(S.oss||[]).findIndex(x=>x.colabId===colabId);
+    if(idx>=0){
+      S.oss[idx]={id:S.oss[idx].id,colabId,dataAtualizacao:'',dataEntrega:'',entregue:false,desatualizada:false,obs:''};
+    }
+    saveToKV().then(()=>{
+      toast('Último registro excluído — OS resetada para Pendente','s');
+      openColabDetail(colabId);
+    }).catch(()=>{
+      toast('Último registro excluído — OS resetada para Pendente','i');
+      openColabDetail(colabId);
+    });
+  } else {
+    scheduleAutoSave();toast('Registro excluído','i');
+    showOSSHistFromColab(colabId);
+  }
 }
 
 function delOSSHistAllFromColab(colabId){
@@ -2860,8 +2985,25 @@ function showOSSHist(colabId){
 function delOSSHistItem(histId,colabId){
   if(!confirm('Excluir este registro do histórico?'))return;
   S.ossHistorico=(S.ossHistorico||[]).filter(x=>x.id!==histId);
-  showOSSHist(colabId);
-  scheduleAutoSave();toast('Registro excluído','i');
+  // Se não sobrou nenhum registro, reseta OS para pendente
+  const remaining=(S.ossHistorico||[]).filter(x=>x.colabId===colabId);
+  if(remaining.length===0){
+    const idx=(S.oss||[]).findIndex(x=>x.colabId===colabId);
+    if(idx>=0){
+      S.oss[idx]={id:S.oss[idx].id,colabId,dataAtualizacao:'',dataEntrega:'',entregue:false,desatualizada:false,obs:''};
+    }
+    saveToKV().then(()=>{
+      showOSSHist(colabId);
+      toast('Último registro excluído — OS resetada para Pendente','s');
+    }).catch(()=>{
+      showOSSHist(colabId);
+      toast('Último registro excluído — OS resetada para Pendente','i');
+    });
+  } else {
+    scheduleAutoSave();
+    showOSSHist(colabId);
+    toast('Registro excluído','i');
+  }
 }
 function delOSSHistAll(colabId){
   const col=(S.colaboradores||[]).find(x=>x.id===colabId);
